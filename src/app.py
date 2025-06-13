@@ -9,8 +9,8 @@ SPEAKER_PIN = 17
 TOUCH_PIN = 22
 PIR_PIN = 20
 
-ALERT_TIMEOUT = 20  # délai en secondes après détection PIR
-MOTION_LOG_COOLDOWN = 60  # on ne log qu'une détection par minute (en secondes)
+ALERT_TIMEOUT = 20  # délai max pour sonner après détection (en secondes)
+INTRUS_ALERT_INTERVAL = 10  # intervalle pour renvoyer l'alerte intrus si présence continue (en secondes)
 
 events = {
     "bell": [],
@@ -31,41 +31,50 @@ def play_bip(duration=0.3):
 
 def hardware_listener():
     last_bell = 0
-    last_motion_log = 0
-    pending_alert = False
-    detection_time = 0
-
+    intrusion_mode = False         # True dès détection PIR
+    pir_detection_time = 0         # Heure début détection
+    intrus_last_alert = 0          # Pour alerter toutes les X sec
     while True:
         now = time.time()
+        pir_detected = GPIO.input(PIR_PIN) == GPIO.HIGH
+        sonnetted = GPIO.input(TOUCH_PIN) == GPIO.HIGH
 
-        # 1. Gestion bouton sonnette
-        if GPIO.input(TOUCH_PIN) == GPIO.HIGH:
+        # Gestion sonnette : priorité absolue, annule alerte en cours
+        if sonnetted:
             if now - last_bell > 2:
                 ts = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
                 events["bell"].insert(0, {"timestamp": ts})
-                print(f"? Sonnerie à {ts}")
+                print(f"🔔 Sonnerie à {ts}")
                 play_bip()
                 last_bell = now
-                # Si une alerte était en attente suite à détection PIR, on l'annule
-                pending_alert = False
-                detection_time = 0
+                # Annule toute alerte/intrusion potentielle (reset cycle)
+                intrusion_mode = False
+                pir_detection_time = 0
+                intrus_last_alert = 0
 
-        # 2. Gestion capteur IR (mouvement)
-        if GPIO.input(PIR_PIN) == GPIO.HIGH:
-            # Log une seule fois par minute max
-            if now - last_motion_log > MOTION_LOG_COOLDOWN:
-                print(f"?? Présence détectée à {datetime.now().strftime('%H:%M:%S')}")
-                last_motion_log = now
-                # Début du timer pour une éventuelle alerte
-                pending_alert = True
-                detection_time = now
+        # Si détection PIR ET PAS en mode intrusion (nouvelle détection)
+        if pir_detected and not intrusion_mode:
+            intrusion_mode = True
+            pir_detection_time = now
+            intrus_last_alert = 0
+            # On ne fait rien encore, on attend la suite...
 
-        # 3. Déclenchement alerte intrus
-        if pending_alert and (now - detection_time > ALERT_TIMEOUT):
-            ts = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
-            events["intrus"].insert(0, {"timestamp": ts})
-            print(f"? INTRUS (pas de sonnette après détection IR) à {ts}")
-            pending_alert = False  # Une seule alerte pour ce cas
+        # Si mode intrusion (donc détection PIR), pas de sonnette dans les 20s -> alerte
+        if intrusion_mode:
+            # Si PIR disparaît, on reset tout
+            if not pir_detected:
+                intrusion_mode = False
+                pir_detection_time = 0
+                intrus_last_alert = 0
+            else:
+                # Si pas de sonnette dans les 20s, on commence à alerter
+                if (now - pir_detection_time) > ALERT_TIMEOUT:
+                    # Envoie alerte toutes les INTRUS_ALERT_INTERVAL secondes tant que PIR est détecté
+                    if (now - intrus_last_alert) > INTRUS_ALERT_INTERVAL:
+                        ts = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+                        events["intrus"].insert(0, {"timestamp": ts})
+                        print(f"🚨 ALERTE INTRUS à {ts}")
+                        intrus_last_alert = now
 
         time.sleep(0.1)
 
@@ -85,7 +94,7 @@ def api_events():
 def api_state():
     return jsonify({
         "bell": GPIO.input(TOUCH_PIN) == GPIO.HIGH,
-        "intrus": len(events["intrus"]) > 0 and (time.time() - time.mktime(datetime.strptime(events["intrus"][0]['timestamp'], "%Y-%m-%d %H:%M:%S").timetuple()) < ALERT_TIMEOUT)
+        "intrus": len(events["intrus"]) > 0  # Affiche juste si une alerte récente existe
     })
 
 @app.route('/')
