@@ -1,0 +1,40 @@
+{% extends "base.html" %}
+{% block content %}
+<div class="card">
+    <div class="card-body">
+        <h3 class="card-title">Tableau de bord</h3>
+        <div class="etat-live">
+            <b>Quelqu'un devant la porte ?</b>
+            {% if current_motion %}
+                <span class="badge bg-danger">Oui</span>
+            {% else %}
+                <span class="badge bg-success">Non</span>
+            {% endif %}
+            &nbsp;|&nbsp;
+            <b>Quelqu'un a appuyé sur la sonnette ?</b>
+            {% if current_bell %}
+                <span class="badge bg-warning text-dark">En cours</span>
+            {% else %}
+                <span class="badge bg-secondary">Non</span>
+            {% endif %}
+        </div>
+        <hr>
+        <h5>Historique des sonneries :</h5>
+        <ul class="list-group mb-3">
+        {% for event in bell_events %}
+            <li class="list-group-item">Sonnette à {{ event.timestamp }}</li>
+        {% else %}
+            <li class="list-group-item text-muted">Aucune sonnerie détectée.</li>
+        {% endfor %}
+        </ul>
+        <h5>Historique des présences (capteur IR) :</h5>
+        <ul class="list-group">
+        {% for event in motion_events %}
+            <li class="list-group-item">Présence à {{ event.timestamp }}</li>
+        {% else %}
+            <li class="list-group-item text-muted">Aucune détection pour l’instant.</li>
+        {% endfor %}
+        </ul>
+    </div>
+</div>
+{% endblock %}
