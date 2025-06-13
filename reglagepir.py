@@ -1,35 +1,25 @@
 import RPi.GPIO as GPIO
 import time
 
-# BCM pin pour la sortie du capteur IR
+# Broche BCM connectée à la sortie OUT du capteur IR
 IR_PIN = 23
 
-# Setup GPIO
+# Intervalle entre deux lectures (en secondes)
+INTERVAL = 0.1
+
+# --- Configuration GPIO ---
 GPIO.setmode(GPIO.BCM)
 GPIO.setup(IR_PIN, GPIO.IN, pull_up_down=GPIO.PUD_DOWN)
 
-# Warm-up du capteur
-CALIB_TIME = 5
-print(f" Warm-up du capteur IR pendant {CALIB_TIME}s… ne bougez pas devant.")
-time.sleep(CALIB_TIME)
-
-print(" Capteur stabilisé. Surveillance des changements d’état (Ctrl+C pour arrêter) …")
-
-# Lecture initiale
-prev_state = GPIO.input(IR_PIN)
-last_time = time.time()
+print("Lecture brute du capteur IR (1 = mouvement / 0 = pas de mouvement).")
+print("Appuyez sur Ctrl+C pour arrêter.\n")
 
 try:
     while True:
-        current = GPIO.input(IR_PIN)
-        if current != prev_state:
-            now = time.time()
-            duration = now - last_time
-            state_str = "HIGH" if prev_state == GPIO.HIGH else "LOW"
-            print(f"{state_str} a duré {duration:.3f} s")
-            prev_state = current
-            last_time = now
-        time.sleep(0.01)  # 10 ms entre chaque vérif
+        state = GPIO.input(IR_PIN)
+        print(state)
+        time.sleep(INTERVAL)
+
 except KeyboardInterrupt:
     GPIO.cleanup()
-    print("\n Arrêt, nettoyage des GPIO.")
+    print("\nArrêt, GPIO nettoyés.")
