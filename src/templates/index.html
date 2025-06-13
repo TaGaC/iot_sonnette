@@ -4,9 +4,6 @@
     <div class="card-body">
         <h3 class="card-title">Tableau de bord</h3>
         <div class="etat-live" id="etat-live">
-            <b>Quelqu'un devant la porte ?</b>
-            <span id="motion-badge" class="badge bg-secondary">Non</span>
-            &nbsp;|&nbsp;
             <b>Quelqu'un a appuyé sur la sonnette ?</b>
             <span id="bell-badge" class="badge bg-secondary">Non</span>
             &nbsp;|&nbsp;
@@ -16,8 +13,6 @@
         <hr>
         <h5>Historique des sonneries :</h5>
         <ul class="list-group mb-3" id="bell-list"></ul>
-        <h5>Historique des présences (capteur IR) :</h5>
-        <ul class="list-group" id="motion-list"></ul>
         <h5>Alertes INTRUS :</h5>
         <ul class="list-group" id="intrus-list"></ul>
     </div>
@@ -29,9 +24,7 @@ function updatePanel() {
     .then(data => {
         document.getElementById("bell-badge").textContent = data.bell ? "En cours" : "Non";
         document.getElementById("bell-badge").className = "badge " + (data.bell ? "bg-warning text-dark" : "bg-secondary");
-        document.getElementById("motion-badge").textContent = data.motion ? "Oui" : "Non";
-        document.getElementById("motion-badge").className = "badge " + (data.motion ? "bg-danger" : "bg-success");
-        document.getElementById("intrus-badge").textContent = data.intrus ? "⚠️ OUI" : "Non";
+        document.getElementById("intrus-badge").textContent = data.intrus ? "?? OUI" : "Non";
         document.getElementById("intrus-badge").className = "badge " + (data.intrus ? "bg-danger" : "bg-secondary");
     });
     fetch("/api/events")
@@ -47,18 +40,6 @@ function updatePanel() {
                 li.className = "list-group-item";
                 li.textContent = "Sonnette à " + e.timestamp;
                 bellList.appendChild(li);
-            });
-        }
-        let motionList = document.getElementById("motion-list");
-        motionList.innerHTML = "";
-        if (data.motion_events.length === 0) {
-            motionList.innerHTML = '<li class="list-group-item text-muted">Aucune détection pour l’instant.</li>';
-        } else {
-            data.motion_events.forEach(e => {
-                let li = document.createElement("li");
-                li.className = "list-group-item";
-                li.textContent = "Présence à " + e.timestamp;
-                motionList.appendChild(li);
             });
         }
         let intrusList = document.getElementById("intrus-list");

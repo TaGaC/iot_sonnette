@@ -5,17 +5,16 @@ import RPi.GPIO as GPIO
 from datetime import datetime
 
 # === CONFIGURATION ===
-SPEAKER_PIN = 17      # GPIO pour le haut-parleur
-TOUCH_PIN = 22        # GPIO pour le bouton tactile
-PIR_PIN = 20        # GPIO pour le capteur IR
+SPEAKER_PIN = 17
+TOUCH_PIN = 22
+PIR_PIN = 20
 
-DETECTION_TIMEOUT = 20  # secondes sans sonnerie après détection PIR = alerte (modifie ici)
-INTRUS_ALERT_COOLDOWN = 10  # envoie une alerte toutes les X secondes en cas de présence persistante
+ALERT_TIMEOUT = 20  # délai en secondes après détection PIR
+MOTION_LOG_COOLDOWN = 60  # on ne log qu'une détection par minute (en secondes)
 
 events = {
-    "bell": [],     # historique des sonneries
-    "motion": [],   # historique des détections IR (mouvement simple)
-    "intrus": []    # historique des alertes "intrus"
+    "bell": [],
+    "intrus": []
 }
 
 GPIO.setmode(GPIO.BCM)
@@ -31,52 +30,42 @@ def play_bip(duration=0.3):
     pwm.stop()
 
 def hardware_listener():
-    last_touch = 0
-    last_pir = 0
-    last_intrus_alert = 0
-    possible_intrus = False
-    detection_start_time = 0
-    cooldown = 2  # entre deux sonnettes
+    last_bell = 0
+    last_motion_log = 0
+    pending_alert = False
+    detection_time = 0
 
     while True:
         now = time.time()
 
-        # === Gestion BOUTON (sonnette) ===
+        # 1. Gestion bouton sonnette
         if GPIO.input(TOUCH_PIN) == GPIO.HIGH:
-            if now - last_touch > cooldown:
+            if now - last_bell > 2:
                 ts = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
                 events["bell"].insert(0, {"timestamp": ts})
-                print(f"🔔 Sonnerie à {ts} (bouton)")
+                print(f"? Sonnerie à {ts}")
                 play_bip()
-                last_touch = now
-                # Si quelqu'un sonne, on annule toute alerte "intrus" potentielle
-                possible_intrus = False
-                detection_start_time = 0
+                last_bell = now
+                # Si une alerte était en attente suite à détection PIR, on l'annule
+                pending_alert = False
+                detection_time = 0
 
-        # === Gestion MOUVEMENT IR ===
+        # 2. Gestion capteur IR (mouvement)
         if GPIO.input(PIR_PIN) == GPIO.HIGH:
-            if now - last_pir > 1.5:  # anti-spam pour l'historique
-                ts = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
-                events["motion"].insert(0, {"timestamp": ts})
-                print(f"🕴️ Mouvement détecté à {ts}")
-                last_pir = now
-            # Début d'une nouvelle présence
-            if not possible_intrus:
-                possible_intrus = True
-                detection_start_time = now
+            # Log une seule fois par minute max
+            if now - last_motion_log > MOTION_LOG_COOLDOWN:
+                print(f"?? Présence détectée à {datetime.now().strftime('%H:%M:%S')}")
+                last_motion_log = now
+                # Début du timer pour une éventuelle alerte
+                pending_alert = True
+                detection_time = now
 
-            # Si la présence PIR continue ET PAS de sonnette, alerte "intrus"
-            if possible_intrus and (now - detection_start_time) > DETECTION_TIMEOUT:
-                # Évite le spam d'alerte (n'envoie qu'une fois toutes les X secondes)
-                if now - last_intrus_alert > INTRUS_ALERT_COOLDOWN:
-                    ts = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
-                    events["intrus"].insert(0, {"timestamp": ts})
-                    print(f"🚨 INTRUS détecté à {ts} !")
-                    last_intrus_alert = now
-        else:
-            # Dès qu'il n'y a plus de présence, on réinitialise le timer de surveillance
-            possible_intrus = False
-            detection_start_time = 0
+        # 3. Déclenchement alerte intrus
+        if pending_alert and (now - detection_time > ALERT_TIMEOUT):
+            ts = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+            events["intrus"].insert(0, {"timestamp": ts})
+            print(f"? INTRUS (pas de sonnette après détection IR) à {ts}")
+            pending_alert = False  # Une seule alerte pour ce cas
 
         time.sleep(0.1)
 
@@ -89,7 +78,6 @@ app = Flask(__name__)
 def api_events():
     return jsonify({
         "bell_events": events["bell"][:10],
-        "motion_events": events["motion"][:10],
         "intrus_events": events["intrus"][:10]
     })
 
@@ -97,21 +85,17 @@ def api_events():
 def api_state():
     return jsonify({
         "bell": GPIO.input(TOUCH_PIN) == GPIO.HIGH,
-        "motion": GPIO.input(PIR_PIN) == GPIO.HIGH,
-        "intrus": len(events["intrus"]) > 0 and (time.time() - time.mktime(datetime.strptime(events["intrus"][0]['timestamp'], "%Y-%m-%d %H:%M:%S").timetuple()) < INTRUS_ALERT_COOLDOWN)
+        "intrus": len(events["intrus"]) > 0 and (time.time() - time.mktime(datetime.strptime(events["intrus"][0]['timestamp'], "%Y-%m-%d %H:%M:%S").timetuple()) < ALERT_TIMEOUT)
     })
 
 @app.route('/')
 def index():
     bell_events = events["bell"][:10]
-    motion_events = events["motion"][:10]
     intrus_events = events["intrus"][:10]
     current_bell = GPIO.input(TOUCH_PIN) == GPIO.HIGH
-    current_motion = GPIO.input(PIR_PIN) == GPIO.HIGH
     current_intrus = len(events["intrus"]) > 0
-    return render_template('index.html', bell_events=bell_events, motion_events=motion_events,
-                           intrus_events=intrus_events, current_bell=current_bell,
-                           current_motion=current_motion, current_intrus=current_intrus)
+    return render_template('index.html', bell_events=bell_events, intrus_events=intrus_events,
+                           current_bell=current_bell, current_intrus=current_intrus)
 
 @app.route('/admin')
 def admin():
@@ -120,7 +104,6 @@ def admin():
 @app.route('/reset', methods=['POST'])
 def reset():
     events["bell"].clear()
-    events["motion"].clear()
     events["intrus"].clear()
     return redirect(url_for('admin'))
 
