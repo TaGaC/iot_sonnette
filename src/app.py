@@ -5,8 +5,6 @@ import time
 import RPi.GPIO as GPIO
 from datetime import datetime
 import atexit
-import json
-
 
 # === Initialisation de l'application Flask et de la DB ===
 app = Flask(__name__)
@@ -33,7 +31,7 @@ with app.app_context():
 # === Configuration GPIO ===
 SPEAKER_PIN = 17  # GPIO pour le haut-parleur
 TOUCH_PIN   = 22  # GPIO pour le bouton tactile
-PIR_PIN     = 14  # GPIO pour le capteur PIR (désactivé)
+PIR_PIN     = 20  # GPIO pour le capteur PIR (désactivé)
 
 GPIO.setwarnings(False)
 GPIO.setmode(GPIO.BCM)
@@ -44,10 +42,19 @@ GPIO.setup(PIR_PIN, GPIO.IN, pull_up_down=gpio_pull)
 
 pwm = GPIO.PWM(SPEAKER_PIN, 1000)
 
-def play_bip(duration=0.3):
-    pwm.start(50)
-    time.sleep(duration)
-    pwm.stop()
+def play_bip():
+    melody = [
+        (523, 0.2),  # DO
+        (659, 0.2),  # MI
+        (784, 0.2),  # SOL
+        (1046, 0.3)  # DO+
+    ]
+    for freq, dur in melody:
+        pwm.ChangeFrequency(freq)
+        pwm.start(50)
+        time.sleep(dur)
+        pwm.stop()
+        time.sleep(0.05)
 
 # === Thread d'écoute hardware ===
 def hardware_listener():
