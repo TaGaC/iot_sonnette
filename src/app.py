@@ -1,10 +1,9 @@
-from flask import Flask, render_template, redirect, url_for, Response
+from flask import Flask, render_template, redirect, url_for, jsonify, Response, stream_with_context
 from flask_sqlalchemy import SQLAlchemy
 import threading
 import time
 import RPi.GPIO as GPIO
 from datetime import datetime
-import json
 import atexit
 
 # === Initialisation de l'application Flask et de la DB ===
@@ -25,20 +24,21 @@ class IntrusEvent(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     timestamp = db.Column(db.DateTime, nullable=False)
 
-# === Création des tables ===
+# === Création des tables si nécessaire ===
 with app.app_context():
     db.create_all()
 
-# === CONFIGURATION GPIO ===
-SPEAKER_PIN = 17
-TOUCH_PIN   = 22
-PIR_PIN     = 14  # non utilisé pour l'instant
+# === Configuration GPIO ===
+SPEAKER_PIN = 17  # GPIO pour le haut-parleur
+TOUCH_PIN   = 22  # GPIO pour le bouton tactile
+PIR_PIN     = 14  # GPIO pour le capteur PIR (désactivé)
 
 GPIO.setwarnings(False)
 GPIO.setmode(GPIO.BCM)
 GPIO.setup(SPEAKER_PIN, GPIO.OUT)
-GPIO.setup(TOUCH_PIN, GPIO.IN, pull_up_down=GPIO.PUD_DOWN)
-GPIO.setup(PIR_PIN, GPIO.IN, pull_up_down=GPIO.PUD_DOWN)
+gpio_pull = GPIO.PUD_DOWN
+GPIO.setup(TOUCH_PIN, GPIO.IN, pull_up_down=gpio_pull)
+GPIO.setup(PIR_PIN, GPIO.IN, pull_up_down=gpio_pull)
 
 pwm = GPIO.PWM(SPEAKER_PIN, 1000)
 
@@ -50,20 +50,19 @@ def play_bip(duration=0.3):
 # === Thread d'écoute hardware ===
 def hardware_listener():
     last_touch = 0
-    cooldown = 5  # secondes : délai minimum entre deux appuis
+    cooldown = 5  # secondes
     while True:
         now = time.time()
         if GPIO.input(TOUCH_PIN) == GPIO.HIGH and (now - last_touch) > cooldown:
             ts = datetime.now()
-            # Enregistrer l'événement en base
-            with app.app_context():
+            with app.app_context():  # ensure context for DB
                 evt = BellEvent(timestamp=ts)
                 db.session.add(evt)
                 db.session.commit()
-            print(f"🔔 Sonnerie détectée à {ts.strftime('%Y-%m-%d %H:%M:%S')}")
+            print(f"🔔 Sonnerie détectée à {ts}")
             play_bip()
             last_touch = now
-            # Attendre le relâchement pour éviter les rebonds
+            # anti-rebond: attendre relâchement
             while GPIO.input(TOUCH_PIN) == GPIO.HIGH:
                 time.sleep(0.1)
         time.sleep(0.05)
@@ -71,18 +70,17 @@ def hardware_listener():
 listener_thread = threading.Thread(target=hardware_listener, daemon=True)
 listener_thread.start()
 
-# === Server-Sent Events (push updates) ===
+# === Server-Sent Events (push) ===
 @app.route('/stream')
 def stream():
-    # Pousser le contexte d'application pour les requêtes SQL dans le générateur
-    ctx = app.app_context()
-    ctx.push()
-
+    @stream_with_context
     def event_stream():
         while True:
+            # Requête en base (dans request context)
             bells = [b.timestamp.strftime('%Y-%m-%d %H:%M:%S')
                      for b in BellEvent.query.order_by(BellEvent.timestamp.desc()).limit(10).all()]
-            intrus = []
+            intrus = [i.timestamp.strftime('%Y-%m-%d %H:%M:%S')
+                      for i in IntrusEvent.query.order_by(IntrusEvent.timestamp.desc()).limit(10).all()]
             state = {
                 'bell': GPIO.input(TOUCH_PIN) == GPIO.HIGH,
                 'intrus': False,
@@ -93,16 +91,15 @@ def stream():
             time.sleep(2)
     return Response(event_stream(), mimetype='text/event-stream')
 
-# === Routes Web ===
+# === Routes classiques ===
 @app.route('/')
 def index():
     return render_template('index.html')
 
 @app.route('/admin')
 def admin():
-    with app.app_context():
-        bell_count = BellEvent.query.count()
-        intrus_count = IntrusEvent.query.count()
+    bell_count = BellEvent.query.count()
+    intrus_count = IntrusEvent.query.count()
     return render_template('admin.html', bell_count=bell_count, intrus_count=intrus_count)
 
 @app.route('/reset', methods=['POST'])
@@ -120,5 +117,5 @@ def cleanup():
     GPIO.cleanup()
 
 if __name__ == '__main__':
-    # Désactive le reloader pour éviter double lancement du thread
+    # Désactive le reloader pour éviter double démarrage
     app.run(host='0.0.0.0', port=5000, debug=True, use_reloader=False)
