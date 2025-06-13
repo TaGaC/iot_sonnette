@@ -5,6 +5,8 @@ import time
 import RPi.GPIO as GPIO
 from datetime import datetime
 import atexit
+import json
+
 
 # === Initialisation de l'application Flask et de la DB ===
 app = Flask(__name__)
