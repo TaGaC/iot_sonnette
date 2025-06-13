@@ -9,12 +9,17 @@
             &nbsp;|&nbsp;
             <b>Quelqu'un a appuyé sur la sonnette ?</b>
             <span id="bell-badge" class="badge bg-secondary">Non</span>
+            &nbsp;|&nbsp;
+            <b>ALERTE INTRUS ?</b>
+            <span id="intrus-badge" class="badge bg-secondary">Non</span>
         </div>
         <hr>
         <h5>Historique des sonneries :</h5>
         <ul class="list-group mb-3" id="bell-list"></ul>
         <h5>Historique des présences (capteur IR) :</h5>
         <ul class="list-group" id="motion-list"></ul>
+        <h5>Alertes INTRUS :</h5>
+        <ul class="list-group" id="intrus-list"></ul>
     </div>
 </div>
 <script>
@@ -26,6 +31,8 @@ function updatePanel() {
         document.getElementById("bell-badge").className = "badge " + (data.bell ? "bg-warning text-dark" : "bg-secondary");
         document.getElementById("motion-badge").textContent = data.motion ? "Oui" : "Non";
         document.getElementById("motion-badge").className = "badge " + (data.motion ? "bg-danger" : "bg-success");
+        document.getElementById("intrus-badge").textContent = data.intrus ? "⚠️ OUI" : "Non";
+        document.getElementById("intrus-badge").className = "badge " + (data.intrus ? "bg-danger" : "bg-secondary");
     });
     fetch("/api/events")
     .then(r => r.json())
@@ -54,9 +61,20 @@ function updatePanel() {
                 motionList.appendChild(li);
             });
         }
+        let intrusList = document.getElementById("intrus-list");
+        intrusList.innerHTML = "";
+        if (data.intrus_events.length === 0) {
+            intrusList.innerHTML = '<li class="list-group-item text-muted">Aucune alerte intrus.</li>';
+        } else {
+            data.intrus_events.forEach(e => {
+                let li = document.createElement("li");
+                li.className = "list-group-item list-group-item-danger";
+                li.textContent = "ALERTE INTRUS à " + e.timestamp;
+                intrusList.appendChild(li);
+            });
+        }
     });
 }
-// Rafraîchit toutes les 2 secondes
 setInterval(updatePanel, 2000);
 window.onload = updatePanel;
 </script>

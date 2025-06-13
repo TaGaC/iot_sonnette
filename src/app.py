@@ -9,10 +9,13 @@ SPEAKER_PIN = 17      # GPIO pour le haut-parleur
 TOUCH_PIN = 22        # GPIO pour le bouton tactile
 PIR_PIN = 14          # GPIO pour le capteur IR
 
-# === STOCKAGE DES ÉVÉNEMENTS ===
+DETECTION_TIMEOUT = 20  # secondes sans sonnerie après détection PIR = alerte (modifie ici)
+INTRUS_ALERT_COOLDOWN = 10  # envoie une alerte toutes les X secondes en cas de présence persistante
+
 events = {
-    "bell": [],
-    "motion": []
+    "bell": [],     # historique des sonneries
+    "motion": [],   # historique des détections IR (mouvement simple)
+    "intrus": []    # historique des alertes "intrus"
 }
 
 GPIO.setmode(GPIO.BCM)
@@ -27,41 +30,18 @@ def play_bip(duration=0.3):
     time.sleep(duration)
     pwm.stop()
 
-# === LOGIQUE PIR SEPAREE ===
-def handle_pir(pir_state, last_pir, pir_streak, pir_triggered, PIR_MAX_IDLE, PIR_THRESHOLD):
-    if pir_state:
-        if time.time() - last_pir < PIR_MAX_IDLE:
-            pir_streak += 1
-        else:
-            pir_streak = 1
-        ts = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
-        events["motion"].insert(0, {"timestamp": ts})
-        print(f"🕴️ Mouvement détecté à {ts} (streak: {pir_streak})")
-        last_pir = time.time()
-        if pir_streak >= PIR_THRESHOLD and not pir_triggered:
-            print("🚨 PIR a détecté 10 fois d'affilé : ALARME SONORE !")
-            play_bip(0.6)
-            pir_triggered = True
-    else:
-        if time.time() - last_pir > PIR_MAX_IDLE:
-            pir_streak = 0
-            pir_triggered = False
-    return last_pir, pir_streak, pir_triggered
-
 def hardware_listener():
     last_touch = 0
-    # === Variables IR (ne serviront pas pour l’instant) ===
-    # last_pir = 0
-    # pir_streak = 0
-    # pir_triggered = False
-    cooldown = 2
-    # PIR_THRESHOLD = 10
-    # PIR_MAX_IDLE = 1.0
+    last_pir = 0
+    last_intrus_alert = 0
+    possible_intrus = False
+    detection_start_time = 0
+    cooldown = 2  # entre deux sonnettes
 
     while True:
         now = time.time()
 
-        # Bouton tactile
+        # === Gestion BOUTON (sonnette) ===
         if GPIO.input(TOUCH_PIN) == GPIO.HIGH:
             if now - last_touch > cooldown:
                 ts = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
@@ -69,14 +49,36 @@ def hardware_listener():
                 print(f"🔔 Sonnerie à {ts} (bouton)")
                 play_bip()
                 last_touch = now
+                # Si quelqu'un sonne, on annule toute alerte "intrus" potentielle
+                possible_intrus = False
+                detection_start_time = 0
 
-        # === PARTIE PIR DESACTIVE POUR LE MOMENT ===
-        # pir_state = GPIO.input(PIR_PIN) == GPIO.HIGH
-        # last_pir, pir_streak, pir_triggered = handle_pir(
-        #     pir_state, last_pir, pir_streak, pir_triggered, PIR_MAX_IDLE, PIR_THRESHOLD
-        # )
+        # === Gestion MOUVEMENT IR ===
+        if GPIO.input(PIR_PIN) == GPIO.HIGH:
+            if now - last_pir > 1.5:  # anti-spam pour l'historique
+                ts = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+                events["motion"].insert(0, {"timestamp": ts})
+                print(f"🕴️ Mouvement détecté à {ts}")
+                last_pir = now
+            # Début d'une nouvelle présence
+            if not possible_intrus:
+                possible_intrus = True
+                detection_start_time = now
 
-        time.sleep(0.05)
+            # Si la présence PIR continue ET PAS de sonnette, alerte "intrus"
+            if possible_intrus and (now - detection_start_time) > DETECTION_TIMEOUT:
+                # Évite le spam d'alerte (n'envoie qu'une fois toutes les X secondes)
+                if now - last_intrus_alert > INTRUS_ALERT_COOLDOWN:
+                    ts = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+                    events["intrus"].insert(0, {"timestamp": ts})
+                    print(f"🚨 INTRUS détecté à {ts} !")
+                    last_intrus_alert = now
+        else:
+            # Dès qu'il n'y a plus de présence, on réinitialise le timer de surveillance
+            possible_intrus = False
+            detection_start_time = 0
+
+        time.sleep(0.1)
 
 listener_thread = threading.Thread(target=hardware_listener, daemon=True)
 listener_thread.start()
@@ -87,19 +89,29 @@ app = Flask(__name__)
 def api_events():
     return jsonify({
         "bell_events": events["bell"][:10],
-        "motion_events": events["motion"][:10]
+        "motion_events": events["motion"][:10],
+        "intrus_events": events["intrus"][:10]
     })
 
+@app.route('/api/state')
+def api_state():
+    return jsonify({
+        "bell": GPIO.input(TOUCH_PIN) == GPIO.HIGH,
+        "motion": GPIO.input(PIR_PIN) == GPIO.HIGH,
+        "intrus": len(events["intrus"]) > 0 and (time.time() - time.mktime(datetime.strptime(events["intrus"][0]['timestamp'], "%Y-%m-%d %H:%M:%S").timetuple()) < INTRUS_ALERT_COOLDOWN)
+    })
 
 @app.route('/')
 def index():
     bell_events = events["bell"][:10]
     motion_events = events["motion"][:10]
+    intrus_events = events["intrus"][:10]
     current_bell = GPIO.input(TOUCH_PIN) == GPIO.HIGH
-    # current_motion = GPIO.input(PIR_PIN) == GPIO.HIGH
-    current_motion = False  # Désactivé car PIR n'est pas géré pour l'instant
+    current_motion = GPIO.input(PIR_PIN) == GPIO.HIGH
+    current_intrus = len(events["intrus"]) > 0
     return render_template('index.html', bell_events=bell_events, motion_events=motion_events,
-                           current_bell=current_bell, current_motion=current_motion)
+                           intrus_events=intrus_events, current_bell=current_bell,
+                           current_motion=current_motion, current_intrus=current_intrus)
 
 @app.route('/admin')
 def admin():
@@ -109,15 +121,8 @@ def admin():
 def reset():
     events["bell"].clear()
     events["motion"].clear()
+    events["intrus"].clear()
     return redirect(url_for('admin'))
-
-@app.route('/api/state')
-def api_state():
-    return jsonify({
-        "bell": GPIO.input(TOUCH_PIN) == GPIO.HIGH,
-        # "motion": GPIO.input(PIR_PIN) == GPIO.HIGH
-        "motion": False
-    })
 
 import atexit
 @atexit.register
