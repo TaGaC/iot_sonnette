@@ -1,25 +1,29 @@
 import RPi.GPIO as GPIO
 import time
 
-# Broche BCM connectée à la sortie OUT du capteur IR
-IR_PIN = 23
+IR_PIN = 23  # BCM
 
-# Intervalle entre deux lectures (en secondes)
-INTERVAL = 0.1
-
-# --- Configuration GPIO ---
 GPIO.setmode(GPIO.BCM)
 GPIO.setup(IR_PIN, GPIO.IN, pull_up_down=GPIO.PUD_DOWN)
 
-print("Lecture brute du capteur IR (1 = mouvement / 0 = pas de mouvement).")
-print("Appuyez sur Ctrl+C pour arrêter.\n")
+print("→ Warm-up 30 s… ne bougez pas devant le capteur.")
+time.sleep(30)
+print("→ Capteur prêt. En attente de front montant (détection).")
 
 try:
     while True:
-        state = GPIO.input(IR_PIN)
-        print(state)
-        time.sleep(INTERVAL)
+        # 1) On attend la détection (passage 0→1)
+        GPIO.wait_for_edge(IR_PIN, GPIO.RISING)
+        t0 = time.time()
+        print(f"🔦 Détection à {time.strftime('%H:%M:%S', time.localtime(t0))}")
+
+        # 2) On attend la fin du pulse (passage 1→0)
+        GPIO.wait_for_edge(IR_PIN, GPIO.FALLING)
+        duree = time.time() - t0
+        print(f"   ↳ Durée du pulse HIGH : {duree:.2f} s\n")
+
+        # 3) Boucle relancée, prêt pour la prochaine détection
 
 except KeyboardInterrupt:
     GPIO.cleanup()
-    print("\nArrêt, GPIO nettoyés.")
+    print("Arrêt, GPIO nettoyés.")
