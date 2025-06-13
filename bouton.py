@@ -2,8 +2,8 @@ import RPi.GPIO as GPIO
 import time
 
 # --- Pins utilisés ---
-TOUCH_PIN = 17  # GPIO17 = Pin 11
-SPEAKER_PIN = 18  # GPIO18 = Pin 12
+TOUCH_PIN = 22  # GPIO22 = Pin 11
+SPEAKER_PIN = 17  # GPIO17 = Pin 12
 
 # --- Setup ---
 GPIO.setmode(GPIO.BCM)

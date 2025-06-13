@@ -3,7 +3,7 @@ import time
 
 # --- Configuration GPIO ---
 GPIO.setmode(GPIO.BCM)
-SPEAKER_PIN = 18  # PWM GPIO
+SPEAKER_PIN = 17  # PWM GPIO
 GPIO.setup(SPEAKER_PIN, GPIO.OUT)
 
 pwm = GPIO.PWM(SPEAKER_PIN, 440)  # Initialisation avec La
