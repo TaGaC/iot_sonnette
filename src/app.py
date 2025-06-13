@@ -63,7 +63,7 @@ def hardware_listener():
                 evt = BellEvent(timestamp=ts)
                 db.session.add(evt)
                 db.session.commit()
-                print(f"🔔 Sonnerie détectée à {ts.strftime('%Y-%m-%d %H:%M:%S')}")
+                print(f" Sonnerie détectée à {ts.strftime('%Y-%m-%d %H:%M:%S')}")
                 play_bip()
                 last_touch = now
         # (PIR désactivé pour l'instant)
@@ -76,11 +76,18 @@ listener_thread.start()
 # === Routes API ===
 @app.route('/api/events')
 def api_events():
-    bells = BellEvent.query.order_by(BellEvent.timestamp.desc()).limit(10).all()
-    intrus = IntrusEvent.query.order_by(IntrusEvent.timestamp.desc()).limit(10).all()
+    # Retourner des objets {timestamp: ...} pour compatibilité avec index.html
+    bells = [
+        {"timestamp": b.timestamp.strftime('%Y-%m-%d %H:%M:%S')} 
+        for b in BellEvent.query.order_by(BellEvent.timestamp.desc()).limit(10)
+    ]
+    intrus = [
+        {"timestamp": i.timestamp.strftime('%Y-%m-%d %H:%M:%S')} 
+        for i in IntrusEvent.query.order_by(IntrusEvent.timestamp.desc()).limit(10)
+    ]
     return jsonify({
-        'bell_events': [b.timestamp.isoformat() for b in bells],
-        'intrus_events': [i.timestamp.isoformat() for i in intrus]
+        'bell_events': bells,
+        'intrus_events': intrus
     })
 
 @app.route('/api/state')
