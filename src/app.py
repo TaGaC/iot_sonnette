@@ -28,9 +28,9 @@ with app.app_context():
     db.create_all()
 
 # === CONFIGURATION GPIO ===
-SPEAKER_PIN = 20  # GPIO pour le haut-parleur
+SPEAKER_PIN = 17  # GPIO pour le haut-parleur
 TOUCH_PIN   = 22  # GPIO pour le bouton tactile
-PIR_PIN     = 14  # GPIO pour le capteur PIR (désactivé pour l'instant)
+PIR_PIN     = 20  # GPIO pour le capteur PIR (désactivé pour l'instant)
 
 GPIO.setmode(GPIO.BCM)
 GPIO.setup(SPEAKER_PIN, GPIO.OUT)
@@ -46,6 +46,10 @@ def play_bip(duration=0.3):
 
 # === Fonction d'écoute hardware ===
 def hardware_listener():
+    # Pousse le contexte d'application pour permettre db.session
+    ctx = app.app_context()
+    ctx.push()
+
     last_touch = 0
     cooldown = 2  # secondes
 
@@ -59,7 +63,7 @@ def hardware_listener():
                 evt = BellEvent(timestamp=ts)
                 db.session.add(evt)
                 db.session.commit()
-                print(f" Sonnerie détectée à {ts.strftime('%Y-%m-%d %H:%M:%S')}")
+                print(f"🔔 Sonnerie détectée à {ts.strftime('%Y-%m-%d %H:%M:%S')}")
                 play_bip()
                 last_touch = now
         # (PIR désactivé pour l'instant)
@@ -82,8 +86,7 @@ def api_events():
 @app.route('/api/state')
 def api_state():
     current_bell = GPIO.input(TOUCH_PIN) == GPIO.HIGH
-    # Desactive pour l'instant PIR
-    current_intrus = False
+    current_intrus = False  # PIR désactivé
     return jsonify({
         'bell': current_bell,
         'intrus': current_intrus
