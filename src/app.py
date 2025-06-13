@@ -83,6 +83,14 @@ listener_thread.start()
 
 app = Flask(__name__)
 
+@app.route('/api/events')
+def api_events():
+    return jsonify({
+        "bell_events": events["bell"][:10],
+        "motion_events": events["motion"][:10]
+    })
+
+
 @app.route('/')
 def index():
     bell_events = events["bell"][:10]

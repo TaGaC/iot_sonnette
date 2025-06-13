@@ -3,38 +3,61 @@
 <div class="card">
     <div class="card-body">
         <h3 class="card-title">Tableau de bord</h3>
-        <div class="etat-live">
+        <div class="etat-live" id="etat-live">
             <b>Quelqu'un devant la porte ?</b>
-            {% if current_motion %}
-                <span class="badge bg-danger">Oui</span>
-            {% else %}
-                <span class="badge bg-success">Non</span>
-            {% endif %}
+            <span id="motion-badge" class="badge bg-secondary">Non</span>
             &nbsp;|&nbsp;
             <b>Quelqu'un a appuyé sur la sonnette ?</b>
-            {% if current_bell %}
-                <span class="badge bg-warning text-dark">En cours</span>
-            {% else %}
-                <span class="badge bg-secondary">Non</span>
-            {% endif %}
+            <span id="bell-badge" class="badge bg-secondary">Non</span>
         </div>
         <hr>
         <h5>Historique des sonneries :</h5>
-        <ul class="list-group mb-3">
-        {% for event in bell_events %}
-            <li class="list-group-item">Sonnette à {{ event.timestamp }}</li>
-        {% else %}
-            <li class="list-group-item text-muted">Aucune sonnerie détectée.</li>
-        {% endfor %}
-        </ul>
+        <ul class="list-group mb-3" id="bell-list"></ul>
         <h5>Historique des présences (capteur IR) :</h5>
-        <ul class="list-group">
-        {% for event in motion_events %}
-            <li class="list-group-item">Présence à {{ event.timestamp }}</li>
-        {% else %}
-            <li class="list-group-item text-muted">Aucune détection pour l’instant.</li>
-        {% endfor %}
-        </ul>
+        <ul class="list-group" id="motion-list"></ul>
     </div>
 </div>
+<script>
+function updatePanel() {
+    fetch("/api/state")
+    .then(r => r.json())
+    .then(data => {
+        document.getElementById("bell-badge").textContent = data.bell ? "En cours" : "Non";
+        document.getElementById("bell-badge").className = "badge " + (data.bell ? "bg-warning text-dark" : "bg-secondary");
+        document.getElementById("motion-badge").textContent = data.motion ? "Oui" : "Non";
+        document.getElementById("motion-badge").className = "badge " + (data.motion ? "bg-danger" : "bg-success");
+    });
+    fetch("/api/events")
+    .then(r => r.json())
+    .then(data => {
+        let bellList = document.getElementById("bell-list");
+        bellList.innerHTML = "";
+        if (data.bell_events.length === 0) {
+            bellList.innerHTML = '<li class="list-group-item text-muted">Aucune sonnerie détectée.</li>';
+        } else {
+            data.bell_events.forEach(e => {
+                let li = document.createElement("li");
+                li.className = "list-group-item";
+                li.textContent = "Sonnette à " + e.timestamp;
+                bellList.appendChild(li);
+            });
+        }
+        let motionList = document.getElementById("motion-list");
+        motionList.innerHTML = "";
+        if (data.motion_events.length === 0) {
+            motionList.innerHTML = '<li class="list-group-item text-muted">Aucune détection pour l’instant.</li>';
+        } else {
+            data.motion_events.forEach(e => {
+                let li = document.createElement("li");
+                li.className = "list-group-item";
+                li.textContent = "Présence à " + e.timestamp;
+                motionList.appendChild(li);
+            });
+        }
+    });
+}
+// Rafraîchit toutes les 2 secondes
+setInterval(updatePanel, 2000);
+window.onload = updatePanel;
+</script>
 {% endblock %}
