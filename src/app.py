@@ -1,9 +1,10 @@
-from flask import Flask, render_template, redirect, url_for, jsonify
+from flask import Flask, render_template, redirect, url_for, jsonify, Response
 from flask_sqlalchemy import SQLAlchemy
 import threading
 import time
 import RPi.GPIO as GPIO
 from datetime import datetime
+import json
 
 # === Initialisation de l'application Flask et de la DB ===
 app = Flask(__name__)
@@ -46,12 +47,12 @@ def play_bip(duration=0.3):
 
 # === Fonction d'écoute hardware ===
 def hardware_listener():
-    # Pousse le contexte d'application pour permettre db.session
+    # Pousse le contexte d'application pour permettre db.session dans le thread
     ctx = app.app_context()
     ctx.push()
 
     last_touch = 0
-    cooldown = 2  # secondes
+    cooldown = 5  # secondes : délai minimum entre deux appuis
 
     while True:
         now = time.time()
@@ -59,55 +60,44 @@ def hardware_listener():
         if GPIO.input(TOUCH_PIN) == GPIO.HIGH:
             if now - last_touch > cooldown:
                 ts = datetime.now()
-                # Enregistrer en base
                 evt = BellEvent(timestamp=ts)
                 db.session.add(evt)
                 db.session.commit()
                 print(f" Sonnerie détectée à {ts.strftime('%Y-%m-%d %H:%M:%S')}")
                 play_bip()
                 last_touch = now
-        # (PIR désactivé pour l'instant)
+                while GPIO.input(TOUCH_PIN) == GPIO.HIGH:
+                    time.sleep(0.1)
         time.sleep(0.05)
 
 # Démarrage du thread hardware
 listener_thread = threading.Thread(target=hardware_listener, daemon=True)
 listener_thread.start()
 
-# === Routes API ===
-@app.route('/api/events')
-def api_events():
-    # Retourner des objets {timestamp: ...} pour compatibilité avec index.html
-    bells = [
-        {"timestamp": b.timestamp.strftime('%Y-%m-%d %H:%M:%S')} 
-        for b in BellEvent.query.order_by(BellEvent.timestamp.desc()).limit(10)
-    ]
-    intrus = [
-        {"timestamp": i.timestamp.strftime('%Y-%m-%d %H:%M:%S')} 
-        for i in IntrusEvent.query.order_by(IntrusEvent.timestamp.desc()).limit(10)
-    ]
-    return jsonify({
-        'bell_events': bells,
-        'intrus_events': intrus
-    })
-
-@app.route('/api/state')
-def api_state():
-    current_bell = GPIO.input(TOUCH_PIN) == GPIO.HIGH
-    current_intrus = False  # PIR désactivé
-    return jsonify({
-        'bell': current_bell,
-        'intrus': current_intrus
-    })
+# === Server-Sent Events (push updates) ===
+@app.route('/stream')
+def stream():
+    def event_stream():
+        while True:
+            # Construire l'état complet
+            bells = [b.timestamp.strftime('%Y-%m-%d %H:%M:%S') 
+                     for b in BellEvent.query.order_by(BellEvent.timestamp.desc()).limit(10).all()]
+            intrus = [i.timestamp.strftime('%Y-%m-%d %H:%M:%S') 
+                      for i in IntrusEvent.query.order_by(IntrusEvent.timestamp.desc()).limit(10).all()]
+            state = {
+                'bell': GPIO.input(TOUCH_PIN) == GPIO.HIGH,
+                'intrus': False,
+                'bell_events': bells,
+                'intrus_events': intrus
+            }
+            yield f"data: {json.dumps(state)}\n\n"
+            time.sleep(2)
+    return Response(event_stream(), mimetype='text/event-stream')
 
 # === Pages Web ===
 @app.route('/')
 def index():
-    bells = BellEvent.query.order_by(BellEvent.timestamp.desc()).limit(10).all()
-    intrus = IntrusEvent.query.order_by(IntrusEvent.timestamp.desc()).limit(10).all()
-    current_bell = GPIO.input(TOUCH_PIN) == GPIO.HIGH
-    current_intrus = False
-    return render_template('index.html', bell_events=bells, intrus_events=intrus,
-                           current_bell=current_bell, current_intrus=current_intrus)
+    return render_template('index.html')
 
 @app.route('/admin')
 def admin():
