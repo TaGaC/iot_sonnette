@@ -1,23 +1,35 @@
 import RPi.GPIO as GPIO
 import time
 
-IR_PIN = 14      # BCM pour SEN0018 OUT
-CALIB_TIME = 10  # warm-up en secondes
-
+IR_PIN = 23    # BCM pour la sortie du capteur
 GPIO.setmode(GPIO.BCM)
+# On s’appuie sur le pull-down interne
 GPIO.setup(IR_PIN, GPIO.IN, pull_up_down=GPIO.PUD_DOWN)
 
-print(f"Warm-up du capteur PIR/IR pendant {CALIB_TIME}s… ne bougez pas devant.")
-time.sleep(CALIB_TIME)
+def ir_detecte(tries=20, delay=0.03):
+    """
+    Lit IR_PIN 'tries' fois, avec 'delay' secondes entre chaque.
+    Ne renvoie True (mouvement) que si toutes les lectures sont à 1.
+    """
+    for _ in range(tries):
+        if GPIO.input(IR_PIN) == GPIO.LOW:
+            return False
+        time.sleep(delay)
+    return True
 
-print(" Capteur stabilisé. Démarrage de la lecture :\n")
+# Warm-up
+print("?? Warm-up du capteur (30 s)… ne bougez pas devant.")
+time.sleep(30)
+
+print("? Démarrage du test IR filtré :")
 try:
     while True:
-        if GPIO.input(IR_PIN) == GPIO.HIGH:
-            print(" MOUVEMENT détecté !")
+        if ir_detecte():
+            print("?? Mouvement détecté")
+            # ici tu joues ton bip ou déclenches ton action
+            time.sleep(2)  # anti-spam
         else:
-            print("⏸ Pas de mouvement.")
-        time.sleep(0.5)
+            print("??  Pas de mouvement")
+        time.sleep(0.1)
 except KeyboardInterrupt:
-    print("\n Arrêt, nettoyage des GPIO.")
     GPIO.cleanup()
