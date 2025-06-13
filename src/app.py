@@ -7,7 +7,7 @@ from datetime import datetime
 # === CONFIGURATION ===
 SPEAKER_PIN = 17      # GPIO pour le haut-parleur
 TOUCH_PIN = 22        # GPIO pour le bouton tactile
-PIR_PIN = 14          # GPIO pour le capteur IR
+PIR_PIN = 20        # GPIO pour le capteur IR
 
 DETECTION_TIMEOUT = 20  # secondes sans sonnerie après détection PIR = alerte (modifie ici)
 INTRUS_ALERT_COOLDOWN = 10  # envoie une alerte toutes les X secondes en cas de présence persistante
