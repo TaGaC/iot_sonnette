@@ -1,6 +1,5 @@
-from flask import Flask, render_template, redirect, url_for, jsonify, Response
+from flask import Flask, render_template, redirect, url_for, Response
 from flask_sqlalchemy import SQLAlchemy
-import threading
 import time
 import RPi.GPIO as GPIO
 from datetime import datetime
@@ -24,66 +23,65 @@ class IntrusEvent(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     timestamp = db.Column(db.DateTime, nullable=False)
 
-# === Création des tables (si elles n'existent pas) ===
+# === Création des tables ===
 with app.app_context():
     db.create_all()
 
 # === CONFIGURATION GPIO ===
-SPEAKER_PIN = 17  # GPIO pour le haut-parleur
-TOUCH_PIN   = 22  # GPIO pour le bouton tactile
-PIR_PIN     = 20  # GPIO pour le capteur PIR (désactivé pour l'instant)
+SPEAKER_PIN = 17
+TOUCH_PIN   = 22
+PIR_PIN     = 20  # non utilisé pour l'instant
 
+GPIO.setwarnings(False)
 GPIO.setmode(GPIO.BCM)
 GPIO.setup(SPEAKER_PIN, GPIO.OUT)
 GPIO.setup(TOUCH_PIN, GPIO.IN, pull_up_down=GPIO.PUD_DOWN)
 GPIO.setup(PIR_PIN, GPIO.IN, pull_up_down=GPIO.PUD_DOWN)
-
 pwm = GPIO.PWM(SPEAKER_PIN, 1000)
 
+# === Fonction de sonnerie ===
 def play_bip(duration=0.3):
     pwm.start(50)
     time.sleep(duration)
     pwm.stop()
 
-# === Fonction d'écoute hardware ===
-def hardware_listener():
-    # Pousse le contexte d'application pour permettre db.session dans le thread
-    ctx = app.app_context()
-    ctx.push()
+# === Détection par callback avec debounce logiciel ===
+last_touch = 0
+COOLDOWN_MS = 5000  # intervalle minimal entre deux déclenchements (ms)
 
-    last_touch = 0
-    cooldown = 5  # secondes : délai minimum entre deux appuis
+def my_callback(channel):
+    global last_touch
+    now_ms = int(time.time() * 1000)
+    # Vérifier le cooldown pour éviter les doubles déclenchements
+    if now_ms - last_touch < COOLDOWN_MS:
+        return
+    last_touch = now_ms
+    ts = datetime.now()
+    # Enregistrer en base de données dans le contexte Flask
+    with app.app_context():
+        evt = BellEvent(timestamp=ts)
+        db.session.add(evt)
+        db.session.commit()
+    print(f"🔔 Sonnerie détectée à {ts.strftime('%Y-%m-%d %H:%M:%S')}")
+    play_bip()
 
-    while True:
-        now = time.time()
-        # Gestion bouton tactile (sonnette)
-        if GPIO.input(TOUCH_PIN) == GPIO.HIGH:
-            if now - last_touch > cooldown:
-                ts = datetime.now()
-                evt = BellEvent(timestamp=ts)
-                db.session.add(evt)
-                db.session.commit()
-                print(f" Sonnerie détectée à {ts.strftime('%Y-%m-%d %H:%M:%S')}")
-                play_bip()
-                last_touch = now
-                while GPIO.input(TOUCH_PIN) == GPIO.HIGH:
-                    time.sleep(0.2)
-        time.sleep(0.05)
-
-# Démarrage du thread hardware
-listener_thread = threading.Thread(target=hardware_listener, daemon=True)
-listener_thread.start()
+# Activer l'interruption sur front montant, avec bouncetime logiciel
+GPIO.add_event_detect(TOUCH_PIN, GPIO.RISING, callback=my_callback, bouncetime=200)
 
 # === Server-Sent Events (push updates) ===
 @app.route('/stream')
 def stream():
+    # Pousser le contexte d'application pour les requêtes SQL dans le générateur
+    ctx = app.app_context()
+    ctx.push()
+
     def event_stream():
         while True:
-            # Construire l'état complet
-            bells = [b.timestamp.strftime('%Y-%m-%d %H:%M:%S') 
+            # Requête en base pour les 10 derniers événements sonnette
+            bells = [b.timestamp.strftime('%Y-%m-%d %H:%M:%S')
                      for b in BellEvent.query.order_by(BellEvent.timestamp.desc()).limit(10).all()]
-            intrus = [i.timestamp.strftime('%Y-%m-%d %H:%M:%S') 
-                      for i in IntrusEvent.query.order_by(IntrusEvent.timestamp.desc()).limit(10).all()]
+            # Pas d'intrusion pour l'instant
+            intrus = []
             state = {
                 'bell': GPIO.input(TOUCH_PIN) == GPIO.HIGH,
                 'intrus': False,
@@ -101,15 +99,17 @@ def index():
 
 @app.route('/admin')
 def admin():
-    return render_template('admin.html',
-                           bell_count=BellEvent.query.count(),
-                           intrus_count=IntrusEvent.query.count())
+    with app.app_context():
+        bell_count = BellEvent.query.count()
+        intrus_count = IntrusEvent.query.count()
+    return render_template('admin.html', bell_count=bell_count, intrus_count=intrus_count)
 
 @app.route('/reset', methods=['POST'])
 def reset():
-    BellEvent.query.delete()
-    IntrusEvent.query.delete()
-    db.session.commit()
+    with app.app_context():
+        BellEvent.query.delete()
+        IntrusEvent.query.delete()
+        db.session.commit()
     return redirect(url_for('admin'))
 
 # === Nettoyage GPIO ===
