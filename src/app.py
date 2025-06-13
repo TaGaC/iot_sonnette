@@ -5,6 +5,7 @@ import time
 import RPi.GPIO as GPIO
 from datetime import datetime
 import atexit
+import json
 
 # === Initialisation de l'application Flask et de la DB ===
 app = Flask(__name__)
@@ -68,7 +69,7 @@ def hardware_listener():
                 evt = BellEvent(timestamp=ts)
                 db.session.add(evt)
                 db.session.commit()
-            print(f"🔔 Sonnerie détectée à {ts}")
+            print(f" Sonnerie détectée à {ts}")
             play_bip()
             last_touch = now
             # anti-rebond: attendre relâchement
