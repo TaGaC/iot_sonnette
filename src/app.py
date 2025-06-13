@@ -27,14 +27,36 @@ def play_bip(duration=0.3):
     time.sleep(duration)
     pwm.stop()
 
+# === LOGIQUE PIR SEPAREE ===
+def handle_pir(pir_state, last_pir, pir_streak, pir_triggered, PIR_MAX_IDLE, PIR_THRESHOLD):
+    if pir_state:
+        if time.time() - last_pir < PIR_MAX_IDLE:
+            pir_streak += 1
+        else:
+            pir_streak = 1
+        ts = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+        events["motion"].insert(0, {"timestamp": ts})
+        print(f"🕴️ Mouvement détecté à {ts} (streak: {pir_streak})")
+        last_pir = time.time()
+        if pir_streak >= PIR_THRESHOLD and not pir_triggered:
+            print("🚨 PIR a détecté 10 fois d'affilé : ALARME SONORE !")
+            play_bip(0.6)
+            pir_triggered = True
+    else:
+        if time.time() - last_pir > PIR_MAX_IDLE:
+            pir_streak = 0
+            pir_triggered = False
+    return last_pir, pir_streak, pir_triggered
+
 def hardware_listener():
     last_touch = 0
-    last_pir = 0
-    pir_streak = 0
-    pir_triggered = False
+    # === Variables IR (ne serviront pas pour l’instant) ===
+    # last_pir = 0
+    # pir_streak = 0
+    # pir_triggered = False
     cooldown = 2
-    PIR_THRESHOLD = 10      # nombre de détections pour sonner
-    PIR_MAX_IDLE = 1.0      # durée max (en s) entre deux détections pour compter la série
+    # PIR_THRESHOLD = 10
+    # PIR_MAX_IDLE = 1.0
 
     while True:
         now = time.time()
@@ -48,28 +70,11 @@ def hardware_listener():
                 play_bip()
                 last_touch = now
 
-        # PIR
-        if GPIO.input(PIR_PIN) == GPIO.HIGH:
-            # Détection continue
-            if now - last_pir < PIR_MAX_IDLE:
-                pir_streak += 1
-            else:
-                pir_streak = 1  # Nouvelle série
-
-            ts = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
-            events["motion"].insert(0, {"timestamp": ts})
-            print(f"🕴️ Mouvement détecté à {ts} (streak: {pir_streak})")
-            last_pir = now
-
-            if pir_streak >= PIR_THRESHOLD and not pir_triggered:
-                print("🚨 PIR a détecté 10 fois d'affilé : ALARME SONORE !")
-                play_bip(0.6)
-                pir_triggered = True
-        else:
-            # Reset si PIR n'a rien détecté pendant plus de PIR_MAX_IDLE secondes
-            if now - last_pir > PIR_MAX_IDLE:
-                pir_streak = 0
-                pir_triggered = False
+        # === PARTIE PIR DESACTIVE POUR LE MOMENT ===
+        # pir_state = GPIO.input(PIR_PIN) == GPIO.HIGH
+        # last_pir, pir_streak, pir_triggered = handle_pir(
+        #     pir_state, last_pir, pir_streak, pir_triggered, PIR_MAX_IDLE, PIR_THRESHOLD
+        # )
 
         time.sleep(0.05)
 
@@ -83,7 +88,8 @@ def index():
     bell_events = events["bell"][:10]
     motion_events = events["motion"][:10]
     current_bell = GPIO.input(TOUCH_PIN) == GPIO.HIGH
-    current_motion = GPIO.input(PIR_PIN) == GPIO.HIGH
+    # current_motion = GPIO.input(PIR_PIN) == GPIO.HIGH
+    current_motion = False  # Désactivé car PIR n'est pas géré pour l'instant
     return render_template('index.html', bell_events=bell_events, motion_events=motion_events,
                            current_bell=current_bell, current_motion=current_motion)
 
@@ -101,7 +107,8 @@ def reset():
 def api_state():
     return jsonify({
         "bell": GPIO.input(TOUCH_PIN) == GPIO.HIGH,
-        "motion": GPIO.input(PIR_PIN) == GPIO.HIGH
+        # "motion": GPIO.input(PIR_PIN) == GPIO.HIGH
+        "motion": False
     })
 
 import atexit
