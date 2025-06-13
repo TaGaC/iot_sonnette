@@ -28,7 +28,7 @@ with app.app_context():
     db.create_all()
 
 # === CONFIGURATION GPIO ===
-SPEAKER_PIN = 17  # GPIO pour le haut-parleur
+SPEAKER_PIN = 20  # GPIO pour le haut-parleur
 TOUCH_PIN   = 22  # GPIO pour le bouton tactile
 PIR_PIN     = 14  # GPIO pour le capteur PIR (désactivé pour l'instant)
 
