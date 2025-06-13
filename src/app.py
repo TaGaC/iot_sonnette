@@ -67,7 +67,7 @@ def hardware_listener():
                 play_bip()
                 last_touch = now
                 while GPIO.input(TOUCH_PIN) == GPIO.HIGH:
-                    time.sleep(0.1)
+                    time.sleep(0.2)
         time.sleep(0.05)
 
 # Démarrage du thread hardware
