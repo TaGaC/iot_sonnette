@@ -105,5 +105,13 @@ def stream():
     return Response(event_stream(), mimetype='text/event-stream')
 
 if __name__ == "__main__":
-    app.run(host='0.0.0.0', port=443, ssl_context=('ssl/cert.pem', 'ssl/key.pem'))
+    from pathlib import Path
+    ssl_cert = Path("ssl/cert.pem")
+    ssl_key = Path("ssl/key.pem")
+    if ssl_cert.exists() and ssl_key.exists():
+        app.run(host='0.0.0.0', port=443, ssl_context=(str(ssl_cert), str(ssl_key)))
+    else:
+        print("❌ Certificat SSL non trouvé dans ssl/cert.pem et ssl/key.pem")
+        print("   → Lance avec HTTP temporairement sur le port 5000")
+        app.run(host='0.0.0.0', port=5000)
 
