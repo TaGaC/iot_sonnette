@@ -64,6 +64,9 @@ def main_loop():
             pir_state = GPIO.input(PIR_PIN) == GPIO.HIGH
             bell_pressed = GPIO.input(TOUCH_PIN) == GPIO.HIGH
 
+            # === DEBUG ÉTAT PIR CHAQUE SECONDE ===
+            print(f"[{datetime.now().strftime('%H:%M:%S')}] [DEBUG] État PIR : {'HIGH (mouvement)' if pir_state else 'LOW (pas de mouvement)'}")
+
             if not mode_surveillance and not pret_rearmement:
                 # Phase d’attente d’une présence
                 if pir_state:
