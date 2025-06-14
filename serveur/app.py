@@ -1,10 +1,10 @@
-from flask import Flask, request, jsonify, render_template, redirect, url_for
+from flask import Flask, request, jsonify, render_template, redirect, url_for, Response, stream_with_context
 from flask_sqlalchemy import SQLAlchemy
-from datetime import datetime
+from datetime import datetime, timezone
+import pytz
 import os
-from flask import Response, stream_with_context
 import time
-import json 
+import json
 
 app = Flask(__name__)
 app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite:///sonnette.db'
@@ -12,6 +12,16 @@ app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
 SECRET_KEY = os.environ.get("SONNETTE_SECRET", "super_secret")
 
 db = SQLAlchemy(app)
+
+# Utilise le fuseau Canada/Est (GMT-4 l’été, GMT-5 l’hiver)
+CANADA_TZ = pytz.timezone("America/Toronto")  # change en "America/Montreal" si tu veux
+
+# === Ajoute ce filtre Jinja2 ===
+@app.template_filter('to_local')
+def to_local(dt):
+    if dt.tzinfo is None:
+        dt = dt.replace(tzinfo=timezone.utc)
+    return dt.astimezone(CANADA_TZ).strftime("%Y-%m-%d %H:%M:%S")
 
 # === Modèles de base de données ===
 class BellEvent(db.Model):
@@ -27,14 +37,12 @@ class IntrusEvent(db.Model):
 with app.app_context():
     db.create_all()
 
-# === Route d'accueil ===
 @app.route('/')
 def index():
     bells = BellEvent.query.order_by(BellEvent.timestamp.desc()).limit(10).all()
     intrus = IntrusEvent.query.order_by(IntrusEvent.timestamp.desc()).limit(10).all()
     return render_template("index.html", bell_events=bells, intrus_events=intrus)
 
-# === Route admin ===
 @app.route('/admin')
 def admin():
     return render_template("admin.html",
@@ -49,7 +57,6 @@ def reset():
     db.session.commit()
     return redirect(url_for('admin'))
 
-# === API pour les requêtes du Raspberry ===
 @app.route('/api/sonnette', methods=['POST'])
 def receive_sonnette():
     data = request.get_json()
@@ -73,17 +80,20 @@ def receive_sonnette():
         return jsonify({"status": "intrus event recorded"})
     else:
         return jsonify({"error": "invalid type"}), 400
-    
-    
+
 @app.route('/stream')
 def stream():
     @stream_with_context
     def event_stream():
         while True:
-            bells = [b.timestamp.strftime('%Y-%m-%d %H:%M:%S')
-                     for b in BellEvent.query.order_by(BellEvent.timestamp.desc()).limit(10).all()]
-            intrus = [i.timestamp.strftime('%Y-%m-%d %H:%M:%S')
-                      for i in IntrusEvent.query.order_by(IntrusEvent.timestamp.desc()).limit(10).all()]
+            bells = [
+                to_local(b.timestamp)
+                for b in BellEvent.query.order_by(BellEvent.timestamp.desc()).limit(10).all()
+            ]
+            intrus = [
+                to_local(i.timestamp)
+                for i in IntrusEvent.query.order_by(IntrusEvent.timestamp.desc()).limit(10).all()
+            ]
             state = {
                 'bell': bool(bells),
                 'intrus': bool(intrus),

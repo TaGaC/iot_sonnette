@@ -3,13 +3,6 @@
 <div class="card">
   <div class="card-body">
     <h3 class="card-title">Tableau de bord</h3>
-    <div class="etat-live" id="etat-live">
-      <b>Quelqu'un a appuyé sur la sonnette ?</b>
-      <span id="bell-badge" class="badge bg-secondary">Non</span>
-      &nbsp;|&nbsp;
-      <b>ALERTE INTRUS ?</b>
-      <span id="intrus-badge" class="badge bg-secondary">Non</span>
-    </div>
     <hr>
     <h5>Historique des sonneries :</h5>
     <ul class="list-group mb-3" id="bell-list"></ul>
@@ -19,38 +12,27 @@
 </div>
 
 <script>
-  // Ouvre une connexion SSE unique
+  // Ouvre une connexion SSE unique pour maj en temps réel
   const evtSource = new EventSource("/stream");
 
   evtSource.onmessage = e => {
     const data = JSON.parse(e.data);
 
-    // 1) Badges
-    const bellBadge   = document.getElementById("bell-badge");
-    bellBadge.textContent = data.bell ? "En cours" : "Non";
-    bellBadge.className = "badge " + (data.bell ? "bg-warning text-dark" : "bg-secondary");
-
-    const intrusBadge = document.getElementById("intrus-badge");
-    intrusBadge.textContent = data.intrus ? "🚨 OUI" : "Non";
-    intrusBadge.className = "badge " + (data.intrus ? "bg-danger" : "bg-secondary");
-
-    // 2) Historique sonnettes
+    // Historique sonnettes
     const bellList = document.getElementById("bell-list");
     bellList.innerHTML = "";
-
     if (data.bell_events.length === 0) {
       bellList.innerHTML = '<li class="list-group-item text-muted">Aucune sonnerie détectée.</li>';
     } else {
       data.bell_events.forEach(ev => {
         let li = document.createElement("li");
         li.className = "list-group-item";
-        li.textContent = "Sonnette à " + ev;  // ev est déjà une chaîne prête à afficher
+        li.textContent = "Sonnette à " + ev;
         bellList.appendChild(li);
       });
     }
 
-
-    // 3) Historique intrus
+    // Historique intrus
     const intrusList = document.getElementById("intrus-list");
     intrusList.innerHTML = "";
     if (data.intrus_events.length === 0) {
