@@ -6,12 +6,12 @@ from datetime import datetime
 # === CONFIGURATION ===
 SPEAKER_PIN = 17
 TOUCH_PIN = 22
-PIR_PIN = 20
+PIR_PIN = 20 
 COOLDOWN = 4  # anti-spam sonnette
 SERVER_URL = "http://145.79.6.244:5000/api/sonnette"
 SECRET_KEY = "super_secret"
 ALERT_TIMEOUT = 20  # délai avant alerte intrus (secondes)
-MIN_PIR_HITS = 3   # nombre de détections PIR pour valider une présence
+MIN_PIR_HITS = 3   # nombre de fronts montants PIR pour valider une présence
 
 GPIO.setwarnings(False)
 GPIO.setmode(GPIO.BCM)
@@ -45,44 +45,44 @@ def send_event(evt_type):
         print(f"[!]  Erreur réseau : {e}")
 
 def main_loop():
-
     print("Calibration du capteur PIR... Merci de ne pas bouger devant le capteur.")
     time.sleep(20)
     print("Calibration terminée. Système prêt. Attente capteur et/ou bouton...")
+
     last_bell = 0
     pir_hits = 0
     pir_window_start = 0
     waiting_for_bell = False
     detection_time = 0
     intrus_sent = False
-
-    print(" Système prêt. Attente capteur et/ou bouton...")
+    last_pir_state = False  # Pour front montant
 
     try:
         while True:
             now = time.time()
-            pir_detected = GPIO.input(PIR_PIN) == GPIO.HIGH
+            pir_state = GPIO.input(PIR_PIN) == GPIO.HIGH
             bell_pressed = GPIO.input(TOUCH_PIN) == GPIO.HIGH
 
-            # --- GESTION PIR ---
-            if pir_detected:
+            # --- GESTION PIR avec front montant uniquement ---
+            if pir_state and not last_pir_state:
                 if pir_hits == 0:
                     pir_window_start = now
                 pir_hits += 1
-                print(f"[{datetime.now().strftime('%H:%M:%S')}] PIR detecté ({pir_hits}/{MIN_PIR_HITS})")
-                time.sleep(0.2)
-            else:
-                if pir_hits and now - pir_window_start > 2:
-                    # Si ça fait plus de 2s sans détection, on reset les coups
-                    pir_hits = 0
-                    pir_window_start = 0
+                print(f"[{datetime.now().strftime('%H:%M:%S')}] PIR détecté (front montant) ({pir_hits}/{MIN_PIR_HITS})")
+            last_pir_state = pir_state
 
-            # Si présence confirmée par PIR (3 détections)
+            # Reset du compteur si plus de 2s sans nouveau front
+            if pir_hits and (now - pir_window_start > 2):
+                print(f"[{datetime.now().strftime('%H:%M:%S')}] Reset du compteur PIR (plus de 2s sans front montant)")
+                pir_hits = 0
+                pir_window_start = 0
+
+            # Si présence confirmée par PIR (3 fronts montants)
             if pir_hits >= MIN_PIR_HITS and not waiting_for_bell:
                 print(f"[{datetime.now().strftime('%H:%M:%S')}] Présence validée, attente éventuelle de sonnette {ALERT_TIMEOUT}s")
                 detection_time = now
                 waiting_for_bell = True
-                intrus_sent = False  # reset flag pour cette séquence
+                intrus_sent = False
 
             # --- GESTION SONNETTE ---
             if bell_pressed and now - last_bell > COOLDOWN:
@@ -93,10 +93,8 @@ def main_loop():
                     waiting_for_bell = False
                     pir_hits = 0
                 else:
-                    # S'il n'y a pas de séquence PIR en cours, c'est une sonnette normale
                     send_event("bell")
                 last_bell = now
-                # Attendre relâchement
                 while GPIO.input(TOUCH_PIN) == GPIO.HIGH:
                     time.sleep(0.1)
 
@@ -108,9 +106,9 @@ def main_loop():
                 waiting_for_bell = False
                 pir_hits = 0
 
-            time.sleep(0.05)
+            time.sleep(1)  # Lecture chaque seconde (tu peux mettre 0.5 si tu veux plus rapide)
     except KeyboardInterrupt:
-        print(" Arrêt demandé, nettoyage GPIO...")
+        print("Arrêt demandé, nettoyage GPIO...")
         GPIO.cleanup()
 
 if __name__ == '__main__':
