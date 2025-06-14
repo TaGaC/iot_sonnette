@@ -4,7 +4,9 @@ from datetime import datetime
 import os
 from flask import Response, stream_with_context
 import time
-import json 
+import json
+import pytz
+QC_TZ = pytz.timezone('America/Toronto') 
 
 app = Flask(__name__)
 app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite:///sonnette.db'
@@ -32,7 +34,11 @@ with app.app_context():
 def index():
     bells = BellEvent.query.order_by(BellEvent.timestamp.desc()).limit(10).all()
     intrus = IntrusEvent.query.order_by(IntrusEvent.timestamp.desc()).limit(10).all()
-    return render_template("index.html", bell_events=bells, intrus_events=intrus)
+    return render_template("index.html", 
+        bell_events=[b.timestamp.astimezone(QC_TZ).strftime('%Y-%m-%d %H:%M:%S') for b in bells],
+        intrus_events=[i.timestamp.astimezone(QC_TZ).strftime('%Y-%m-%d %H:%M:%S') for i in intrus]
+    )
+
 
 # === Route admin ===
 @app.route('/admin')
