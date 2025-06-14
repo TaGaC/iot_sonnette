@@ -4,7 +4,9 @@ from datetime import datetime
 import os
 from flask import Response, stream_with_context
 import time
-import json 
+import json
+import pytz
+QC_TZ = pytz.timezone('America/Toronto') 
 
 app = Flask(__name__)
 app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite:///sonnette.db'

@@ -3,6 +3,7 @@ import time
 import requests
 from datetime import datetime
 
+
 # === CONFIGURATION ===
 SPEAKER_PIN = 17
 TOUCH_PIN = 22

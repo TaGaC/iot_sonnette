@@ -37,16 +37,20 @@
     // 2) Historique sonnettes
     const bellList = document.getElementById("bell-list");
     bellList.innerHTML = "";
+
     if (data.bell_events.length === 0) {
       bellList.innerHTML = '<li class="list-group-item text-muted">Aucune sonnerie détectée.</li>';
     } else {
       data.bell_events.forEach(ev => {
+        let dateUTC = new Date(ev);  // ev est une string ISO
+        let localTime = dateUTC.toLocaleString();  // convertit selon l'heure locale du navigateur
         let li = document.createElement("li");
         li.className = "list-group-item";
-        li.textContent = "Sonnette à " + ev;
+        li.textContent = "Sonnette à " + localTime;
         bellList.appendChild(li);
       });
     }
+
 
     // 3) Historique intrus
     const intrusList = document.getElementById("intrus-list");
