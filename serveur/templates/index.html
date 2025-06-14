@@ -42,9 +42,9 @@
       bellList.innerHTML = '<li class="list-group-item text-muted">Aucune sonnerie détectée.</li>';
     } else {
       data.bell_events.forEach(ev => {
-        let dateUTC = new Date(ev);
+        let dateUTC = new Date(ev);  // ev est une string ISO UTC
         let localTime = dateUTC.toLocaleString("fr-CA", {
-          timeZone: Intl.DateTimeFormat().resolvedOptions().timeZone,
+          timeZone: "America/Toronto",
           hour: "2-digit",
           minute: "2-digit",
           second: "2-digit",
@@ -58,7 +58,6 @@
         bellList.appendChild(li);
       });
     }
-
 
 
     // 3) Historique intrus
