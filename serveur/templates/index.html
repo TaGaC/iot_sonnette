@@ -42,14 +42,23 @@
       bellList.innerHTML = '<li class="list-group-item text-muted">Aucune sonnerie détectée.</li>';
     } else {
       data.bell_events.forEach(ev => {
-        let dateUTC = new Date(ev);  // ev est une string ISO
-        let localTime = dateUTC.toLocaleString();  // convertit selon l'heure locale du navigateur
+        let dateUTC = new Date(ev);
+        let localTime = dateUTC.toLocaleString("fr-CA", {
+          timeZone: Intl.DateTimeFormat().resolvedOptions().timeZone,
+          hour: "2-digit",
+          minute: "2-digit",
+          second: "2-digit",
+          day: "2-digit",
+          month: "2-digit",
+          year: "numeric"
+        });
         let li = document.createElement("li");
         li.className = "list-group-item";
         li.textContent = "Sonnette à " + localTime;
         bellList.appendChild(li);
       });
     }
+
 
 
     // 3) Historique intrus
