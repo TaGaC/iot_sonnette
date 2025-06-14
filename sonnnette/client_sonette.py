@@ -45,6 +45,10 @@ def send_event(evt_type):
         print(f"[!]  Erreur réseau : {e}")
 
 def main_loop():
+
+    print("Calibration du capteur PIR... Merci de ne pas bouger devant le capteur.")
+    time.sleep(20)
+    print("Calibration terminée. Système prêt. Attente capteur et/ou bouton...")
     last_bell = 0
     pir_hits = 0
     pir_window_start = 0
