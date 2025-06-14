@@ -1,11 +1,11 @@
-from flask import Flask, request, jsonify, render_template, redirect, url_for
+from flask import Flask, request, jsonify, render_template, redirect, url_for, Response, stream_with_context
 from flask_sqlalchemy import SQLAlchemy
 from datetime import datetime
 import os
-from flask import Response, stream_with_context
 import time
 import json
 import pytz
+
 QC_TZ = pytz.timezone('America/Toronto') 
 
 app = Flask(__name__)
@@ -39,7 +39,6 @@ def index():
         intrus_events=[i.timestamp.astimezone(QC_TZ).strftime('%Y-%m-%d %H:%M:%S') for i in intrus]
     )
 
-
 # === Route admin ===
 @app.route('/admin')
 def admin():
@@ -65,7 +64,7 @@ def receive_sonnette():
     evt_type = data.get("type")
     ts_raw = data.get("timestamp")
     try:
-        ts = datetime.fromisoformat(ts_raw)
+        ts = datetime.fromisoformat(ts_raw).astimezone(QC_TZ)
     except:
         return jsonify({"error": "invalid timestamp"}), 400
 
@@ -79,8 +78,7 @@ def receive_sonnette():
         return jsonify({"status": "intrus event recorded"})
     else:
         return jsonify({"error": "invalid type"}), 400
-    
-    
+
 @app.route('/stream')
 def stream():
     @stream_with_context
