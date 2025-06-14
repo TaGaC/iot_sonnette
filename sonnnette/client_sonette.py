@@ -7,7 +7,7 @@ from datetime import datetime
 SPEAKER_PIN = 17
 TOUCH_PIN = 22
 COOLDOWN = 4  # secondes
-SERVER_URL = "https://145.79.6.244/api/sonnette"  # à modifier
+SERVER_URL = "http://145.79.6.244:5000/api/sonnette"  # à modifier
 SECRET_KEY = "super_secret"  # clé partagée avec le serveur
 
 GPIO.setwarnings(False)

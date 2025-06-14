@@ -2,6 +2,9 @@ from flask import Flask, request, jsonify, render_template, redirect, url_for
 from flask_sqlalchemy import SQLAlchemy
 from datetime import datetime
 import os
+from flask import Response, stream_with_context
+import time
+import json 
 
 app = Flask(__name__)
 app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite:///sonnette.db'
@@ -70,6 +73,26 @@ def receive_sonnette():
         return jsonify({"status": "intrus event recorded"})
     else:
         return jsonify({"error": "invalid type"}), 400
+    
+    
+@app.route('/stream')
+def stream():
+    @stream_with_context
+    def event_stream():
+        while True:
+            bells = [b.timestamp.strftime('%Y-%m-%d %H:%M:%S')
+                     for b in BellEvent.query.order_by(BellEvent.timestamp.desc()).limit(10).all()]
+            intrus = [i.timestamp.strftime('%Y-%m-%d %H:%M:%S')
+                      for i in IntrusEvent.query.order_by(IntrusEvent.timestamp.desc()).limit(10).all()]
+            state = {
+                'bell': bool(bells),
+                'intrus': bool(intrus),
+                'bell_events': bells,
+                'intrus_events': intrus
+            }
+            yield f"data: {json.dumps(state)}\n\n"
+            time.sleep(2)
+    return Response(event_stream(), mimetype='text/event-stream')
 
 if __name__ == "__main__":
     app.run(host='0.0.0.0', port=5000, debug=True)
