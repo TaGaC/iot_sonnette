@@ -67,20 +67,24 @@ def main_loop():
             if pir_state:
                 high_streak += 1
                 low_streak = 0
+                restants = MIN_HIGH_STREAK - high_streak
+                print(f"[{datetime.now().strftime('%H:%M:%S')}] PIR HIGH ({high_streak}/{MIN_HIGH_STREAK}) {'- Encore %d avant décompte!' % restants if restants > 0 else '- Séquence armée !'}")
             else:
                 low_streak += 1
                 high_streak = 0
+                restants = MIN_LOW_STREAK - low_streak
+                print(f"[{datetime.now().strftime('%H:%M:%S')}] PIR LOW ({low_streak}/{MIN_LOW_STREAK}) {'- Encore %d avant réarmement.' % restants if restants > 0 else '- Réarmement imminent.'}")
 
             # Validation de présence après X HIGH consécutifs
-            if not intrusion_mode and high_streak >= MIN_HIGH_STREAK:
-                print(f"[{datetime.now().strftime('%H:%M:%S')}] PIR : {MIN_HIGH_STREAK} HIGH consécutifs, décompte lancé pour intrusion.")
+            if not intrusion_mode and high_streak == MIN_HIGH_STREAK:
+                print(f"[{datetime.now().strftime('%H:%M:%S')}] === {MIN_HIGH_STREAK} HIGH consécutifs détectés : DÉBUT DU DÉCOMPTE ALERTE INTRUS ({ALERT_TIMEOUT}s) ===")
                 intrusion_mode = True
                 detection_time = now
                 intrus_sent = False
 
             # Détection de 4 LOW consécutifs → on réarme tout
-            if intrusion_mode and low_streak >= MIN_LOW_STREAK:
-                print(f"[{datetime.now().strftime('%H:%M:%S')}] PIR : {MIN_LOW_STREAK} LOW consécutifs, réarmement du système.")
+            if intrusion_mode and low_streak == MIN_LOW_STREAK:
+                print(f"[{datetime.now().strftime('%H:%M:%S')}] === {MIN_LOW_STREAK} LOW consécutifs détectés : SYSTÈME RÉARMÉ ===")
                 intrusion_mode = False
                 high_streak = 0
                 low_streak = 0
@@ -93,7 +97,7 @@ def main_loop():
                 play_bip()
                 if intrusion_mode:
                     send_event("bell")
-                    print(f"[{datetime.now().strftime('%H:%M:%S')}] Sonnerie pendant alerte : tout est annulé.")
+                    print(f"[{datetime.now().strftime('%H:%M:%S')}] Sonnerie pendant alerte : annulation du cycle alerte/intrus.")
                     intrusion_mode = False
                     high_streak = 0
                     low_streak = 0
