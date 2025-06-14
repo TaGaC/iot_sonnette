@@ -11,7 +11,7 @@ COOLDOWN = 4  # anti-spam sonnette
 SERVER_URL = "http://145.79.6.244:5000/api/sonnette"
 SECRET_KEY = "super_secret"
 ALERT_TIMEOUT = 20  # délai avant alerte intrus (secondes)
-MIN_HIGH_STREAK = 5    # Nombre de HIGH consécutifs pour valider la présence
+MIN_HIGH_STREAK = 8    # Nombre de HIGH consécutifs pour valider la présence
 MIN_LOW_STREAK = 4     # Nombre de LOW consécutifs pour réarmer
 
 GPIO.setwarnings(False)
