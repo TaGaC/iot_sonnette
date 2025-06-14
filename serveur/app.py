@@ -5,6 +5,9 @@ import pytz
 import os
 import time
 import json
+from pywebpush import webpush, WebPushException
+from sqlalchemy.dialects.sqlite import JSON
+
 
 app = Flask(__name__)
 app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite:///sonnette.db'
@@ -33,6 +36,35 @@ class IntrusEvent(db.Model):
     __tablename__ = 'intrus_events'
     id = db.Column(db.Integer, primary_key=True)
     timestamp = db.Column(db.DateTime, nullable=False)
+    
+# Nouvelle table pour les abonnements Push
+class PushSubscription(db.Model):
+    id = db.Column(db.Integer, primary_key=True)
+    subscription = db.Column(JSON, nullable=False)
+    
+    
+    
+VAPID_PUBLIC_KEY = os.environ.get("MFkwEwYHKoZIzj0CAQYIKoZIzj0DAQcDQgAEK1C4gCx4QpJU2XDku1w+kFwDybyMfIH5VZM1kstuJpqi2wRtWt17BJbm2Tg7eh/lSAB3Uvq72sPdIxt6OoA+0w==")
+VAPID_PRIVATE_KEY = os.environ.get("MIGHAgEAMBMGByqGSM49AgEGCCqGSM49AwEHBG0wawIBAQQgmvn92xFm2TrD6pS714Uavv07LtY8Gp7Ib51clskV6JShRANCAAQrULiALHhCklTZcOS7XD6QXAPJvIx8gflVkzWSy24mmqLbBG1a3XsElubZODt6H+VIAHdS+rvaw90jG3o6gD7T")
+
+def notify_all_intrus():
+    subs = PushSubscription.query.all()
+    payload = json.dumps({
+        "title": "🚨 Intrus détecté",
+        "body": "Un mouvement a été détecté près de la sonnette !",
+        "icon": "/static/intrus.png"
+    })
+    for sub in subs:
+        try:
+            webpush(
+                subscription_info=sub.subscription,
+                data=payload,
+                vapid_private_key=VAPID_PRIVATE_KEY,
+                vapid_claims={"sub": "mailto:admin@example.com"}
+            )
+        except WebPushException as ex:
+            print(f"[!] Notification échouée : {ex}")
+
 
 with app.app_context():
     db.create_all()
@@ -77,6 +109,7 @@ def receive_sonnette():
     elif evt_type == "intrus":
         db.session.add(IntrusEvent(timestamp=ts))
         db.session.commit()
+        notify_all_intrus()
         return jsonify({"status": "intrus event recorded"})
     else:
         return jsonify({"error": "invalid type"}), 400
@@ -103,6 +136,19 @@ def stream():
             yield f"data: {json.dumps(state)}\n\n"
             time.sleep(2)
     return Response(event_stream(), mimetype='text/event-stream')
+
+# Route pour s’abonner
+@app.route('/api/subscribe', methods=['POST'])
+def subscribe():
+    data = request.get_json()
+    if not data:
+        return jsonify({"error": "no data"}), 400
+
+    new_sub = PushSubscription(subscription=data)
+    db.session.add(new_sub)
+    db.session.commit()
+    return jsonify({"status": "subscribed"})
+
 
 if __name__ == "__main__":
     app.run(host='0.0.0.0', port=5000, debug=True)
