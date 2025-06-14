@@ -53,9 +53,10 @@ def main_loop():
     last_bell = 0
     high_streak = 0
     low_streak = 0
-    intrusion_mode = False
+    mode_surveillance = False
     detection_time = 0
     intrus_sent = False
+    pret_rearmement = False
 
     try:
         while True:
@@ -63,57 +64,75 @@ def main_loop():
             pir_state = GPIO.input(PIR_PIN) == GPIO.HIGH
             bell_pressed = GPIO.input(TOUCH_PIN) == GPIO.HIGH
 
-            # --- Lecture PIR HIGH/LOW streak ---
-            if pir_state:
-                high_streak += 1
-                low_streak = 0
-                restants = MIN_HIGH_STREAK - high_streak
-                print(f"[{datetime.now().strftime('%H:%M:%S')}] PIR HIGH ({high_streak}/{MIN_HIGH_STREAK}) {'- Encore %d avant décompte!' % restants if restants > 0 else '- Séquence armée !'}")
-            else:
-                low_streak += 1
-                high_streak = 0
-                restants = MIN_LOW_STREAK - low_streak
-                print(f"[{datetime.now().strftime('%H:%M:%S')}] PIR LOW ({low_streak}/{MIN_LOW_STREAK}) {'- Encore %d avant réarmement.' % restants if restants > 0 else '- Réarmement imminent.'}")
+            if not mode_surveillance and not pret_rearmement:
+                # Phase d’attente d’une présence
+                if pir_state:
+                    high_streak += 1
+                    if high_streak <= MIN_HIGH_STREAK:
+                        restants = MIN_HIGH_STREAK - high_streak
+                        print(f"[{datetime.now().strftime('%H:%M:%S')}] PIR HIGH ({high_streak}/{MIN_HIGH_STREAK}) {'- Encore %d avant décompte!' % restants if restants > 0 else '- Séquence armée !'}")
+                    if high_streak == MIN_HIGH_STREAK:
+                        print(f"[{datetime.now().strftime('%H:%M:%S')}] === {MIN_HIGH_STREAK} HIGH consécutifs détectés : DÉBUT DU DÉCOMPTE ALERTE INTRUS ({ALERT_TIMEOUT}s) ===")
+                        mode_surveillance = True
+                        detection_time = now
+                        intrus_sent = False
+                        low_streak = 0
+                else:
+                    if high_streak > 0:
+                        print(f"[{datetime.now().strftime('%H:%M:%S')}] PIR repasse LOW, reset du compteur HIGH.")
+                    high_streak = 0
 
-            # Validation de présence après X HIGH consécutifs
-            if not intrusion_mode and high_streak == MIN_HIGH_STREAK:
-                print(f"[{datetime.now().strftime('%H:%M:%S')}] === {MIN_HIGH_STREAK} HIGH consécutifs détectés : DÉBUT DU DÉCOMPTE ALERTE INTRUS ({ALERT_TIMEOUT}s) ===")
-                intrusion_mode = True
-                detection_time = now
-                intrus_sent = False
-
-            # Détection de 4 LOW consécutifs → on réarme tout
-            if intrusion_mode and low_streak == MIN_LOW_STREAK:
-                print(f"[{datetime.now().strftime('%H:%M:%S')}] === {MIN_LOW_STREAK} LOW consécutifs détectés : SYSTÈME RÉARMÉ ===")
-                intrusion_mode = False
-                high_streak = 0
-                low_streak = 0
-                detection_time = 0
-                intrus_sent = False
+            elif mode_surveillance:
+                # On surveille l'intrus ou la sonnette, on ignore le reste
+                if pir_state:
+                    pass  # pas de log, on reste en surveillance
+                else:
+                    low_streak += 1
+                    if low_streak <= MIN_LOW_STREAK:
+                        restants = MIN_LOW_STREAK - low_streak
+                        print(f"[{datetime.now().strftime('%H:%M:%S')}] PIR LOW en surveillance ({low_streak}/{MIN_LOW_STREAK}) {'- Encore %d avant réarmement.' % restants if restants > 0 else '- Réarmement possible après événement.'}")
+                # Déclenchement alerte intrus si temps écoulé
+                if not intrus_sent and (now - detection_time > ALERT_TIMEOUT):
+                    print(f"[{datetime.now().strftime('%H:%M:%S')}] ⚠️ INTRUS détecté (pas de sonnette après {ALERT_TIMEOUT}s)")
+                    send_event("intrus")
+                    intrus_sent = True
+                    pret_rearmement = True
+                    mode_surveillance = False
+                    high_streak = 0
+                    detection_time = 0
+                    # le low_streak continue pour le réarmement
+                # Si on atteint le nombre de LOW pour réarmer après événement
+                if intrus_sent and low_streak == MIN_LOW_STREAK:
+                    print(f"[{datetime.now().strftime('%H:%M:%S')}] === {MIN_LOW_STREAK} LOW consécutifs détectés : SYSTÈME RÉARMÉ ===")
+                    pret_rearmement = False
+                    intrus_sent = False
+                    low_streak = 0
 
             # --- Gestion bouton sonnette ---
             if bell_pressed and now - last_bell > COOLDOWN:
                 print(f"[{datetime.now().strftime('%H:%M:%S')}]  Bouton pressé")
                 play_bip()
-                if intrusion_mode:
+                if mode_surveillance:
                     send_event("bell")
                     print(f"[{datetime.now().strftime('%H:%M:%S')}] Sonnerie pendant alerte : annulation du cycle alerte/intrus.")
-                    intrusion_mode = False
+                    pret_rearmement = True
+                    mode_surveillance = False
                     high_streak = 0
-                    low_streak = 0
                     detection_time = 0
                     intrus_sent = False
+                    # On passe en attente de LOW pour réarmer
                 else:
                     send_event("bell")
                 last_bell = now
                 while GPIO.input(TOUCH_PIN) == GPIO.HIGH:
                     time.sleep(0.1)
 
-            # --- Déclenchement alerte intrus si temps écoulé ---
-            if intrusion_mode and not intrus_sent and (now - detection_time > ALERT_TIMEOUT):
-                print(f"[{datetime.now().strftime('%H:%M:%S')}] ⚠️ INTRUS détecté (pas de sonnette après {ALERT_TIMEOUT}s)")
-                send_event("intrus")
-                intrus_sent = True  # Une seule alerte par présence
+            # Si on est en attente de réarmement après événement et qu'on atteint le nombre de LOW
+            if pret_rearmement and low_streak == MIN_LOW_STREAK:
+                print(f"[{datetime.now().strftime('%H:%M:%S')}] === {MIN_LOW_STREAK} LOW consécutifs détectés : SYSTÈME RÉARMÉ ===")
+                pret_rearmement = False
+                intrus_sent = False
+                low_streak = 0
 
             time.sleep(1)
     except KeyboardInterrupt:
