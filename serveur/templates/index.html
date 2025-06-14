@@ -1,55 +1,109 @@
 {% extends "base.html" %}
 {% block content %}
-<div class="card">
-  <div class="card-body">
-    <h3 class="card-title">Tableau de bord</h3>
-    <hr>
-    <h5>Historique des sonneries :</h5>
-    <ul class="list-group mb-3" id="bell-list"></ul>
-    <h5>Alertes INTRUS :</h5>
-    <ul class="list-group" id="intrus-list"></ul>
+<div class="container-fluid px-3">
+  <div class="row g-3">
+    <!-- COLONNE GAUCHE -->
+    <div class="col-md-6">
+      <!-- Haut gauche : Fonctions de contrôle -->
+      <div class="card mb-3">
+        <div class="card-body">
+          <h4 class="card-title mb-3">Contrôle</h4>
+          <button class="btn btn-primary mb-2" disabled>Ouvrir la porte</button>
+          <button class="btn btn-secondary mb-2" disabled>Enregistrer audio</button>
+          <!-- Ajoute ici d'autres boutons/fonctionnalités... -->
+        </div>
+      </div>
+      <!-- Bas gauche : Flux vidéo (factice) -->
+      <div class="card">
+        <div class="card-body text-center">
+          <h4 class="card-title mb-3">Vidéo Porte</h4>
+          <div class="border rounded" style="background:#333; height:200px; color:#fff; display:flex; align-items:center; justify-content:center;">
+            [Flux vidéo indisponible]
+          </div>
+        </div>
+      </div>
+    </div>
+    <!-- COLONNE DROITE -->
+    <div class="col-md-6">
+      <!-- Haut droite : Historique Sonneries -->
+      <div class="card mb-3">
+        <div class="card-body">
+          <h4 class="card-title">Historique des sonneries</h4>
+          <div id="bell-history"></div>
+        </div>
+      </div>
+      <!-- Bas droite : Historique Intrusions -->
+      <div class="card">
+        <div class="card-body">
+          <h4 class="card-title">Alertes INTRUS</h4>
+          <div id="intrus-history"></div>
+        </div>
+      </div>
+    </div>
   </div>
 </div>
 
 <script>
-  // Ouvre une connexion SSE unique pour maj en temps réel
-  const evtSource = new EventSource("/stream");
+function groupByDay(events) {
+  // events: array of "YYYY-MM-DD HH:MM:SS" (déjà à l'heure locale !)
+  const grouped = {};
+  events.forEach(ev => {
+    const [date, time] = ev.split(' ');
+    const [year, month, day] = date.split('-');
+    const eventDate = new Date(`${date}T${time}`);
+    // Utilise Intl.DateTimeFormat pour localiser le nom du jour/mois en français
+    const dayLabel = eventDate.toLocaleDateString('fr-FR', { weekday: 'long', day: '2-digit', month: 'long', year: 'numeric' });
+    if (!grouped[dayLabel]) grouped[dayLabel] = [];
+    // Extrait juste l'heure sans les secondes
+    const hourMin = time.slice(0, 5);
+    grouped[dayLabel].push(hourMin);
+  });
+  return grouped;
+}
 
-  evtSource.onmessage = e => {
-    const data = JSON.parse(e.data);
+// Connecte au flux serveur
+const evtSource = new EventSource("/stream");
 
-    // Historique sonnettes
-    const bellList = document.getElementById("bell-list");
-    bellList.innerHTML = "";
-    if (data.bell_events.length === 0) {
-      bellList.innerHTML = '<li class="list-group-item text-muted">Aucune sonnerie détectée.</li>';
-    } else {
-      data.bell_events.forEach(ev => {
-        let li = document.createElement("li");
-        li.className = "list-group-item";
-        li.textContent = "Sonnette à " + ev;
-        bellList.appendChild(li);
+evtSource.onmessage = e => {
+  const data = JSON.parse(e.data);
+
+  // Historique sonneries (groupé par jour puis heure)
+  const bellGrouped = groupByDay(data.bell_events || []);
+  const bellDiv = document.getElementById("bell-history");
+  bellDiv.innerHTML = "";
+  if (Object.keys(bellGrouped).length === 0) {
+    bellDiv.innerHTML = '<div class="text-muted">Aucune sonnerie détectée.</div>';
+  } else {
+    for (const [day, hours] of Object.entries(bellGrouped)) {
+      let html = `<div class="fw-bold mb-1">${day.charAt(0).toUpperCase() + day.slice(1)} :</div><ul class="list-group mb-2">`;
+      hours.forEach(hhmm => {
+        html += `<li class="list-group-item py-1">Sonnette à ${hhmm}</li>`;
       });
+      html += '</ul>';
+      bellDiv.innerHTML += html;
     }
+  }
 
-    // Historique intrus
-    const intrusList = document.getElementById("intrus-list");
-    intrusList.innerHTML = "";
-    if (data.intrus_events.length === 0) {
-      intrusList.innerHTML = '<li class="list-group-item text-muted">Aucune alerte intrus.</li>';
-    } else {
-      data.intrus_events.forEach(ev => {
-        let li = document.createElement("li");
-        li.className = "list-group-item list-group-item-danger";
-        li.textContent = "ALERTE INTRUS à " + ev;
-        intrusList.appendChild(li);
+  // Historique intrus (groupé par jour puis heure)
+  const intrusGrouped = groupByDay(data.intrus_events || []);
+  const intrusDiv = document.getElementById("intrus-history");
+  intrusDiv.innerHTML = "";
+  if (Object.keys(intrusGrouped).length === 0) {
+    intrusDiv.innerHTML = '<div class="text-muted">Aucune alerte intrus.</div>';
+  } else {
+    for (const [day, hours] of Object.entries(intrusGrouped)) {
+      let html = `<div class="fw-bold mb-1">${day.charAt(0).toUpperCase() + day.slice(1)} :</div><ul class="list-group mb-2">`;
+      hours.forEach(hhmm => {
+        html += `<li class="list-group-item list-group-item-danger py-1">ALERTE INTRUS à ${hhmm}</li>`;
       });
+      html += '</ul>';
+      intrusDiv.innerHTML += html;
     }
-  };
+  }
+};
 
-  evtSource.onerror = err => {
-    console.error("SSE error:", err);
-    // Optionnel : tenter de se reconnecter
-  };
+evtSource.onerror = err => {
+  console.error("SSE error:", err);
+};
 </script>
 {% endblock %}
