@@ -2,3 +2,4 @@ Flask
 Flask-SQLAlchemy
 pytz
 pywebpush
+gunicorn
