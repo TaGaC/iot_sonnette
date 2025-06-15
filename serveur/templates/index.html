@@ -64,7 +64,7 @@ async function initPush() {
 
   const sub = await reg.pushManager.subscribe({
     userVisibleOnly: true,
-    applicationServerKey: urlBase64ToUint8Array(VAPID_PUBLIC_KEY)
+    applicationServerKey: VAPID_PUBLIC_KEY
   });
 
   await fetch("/subscribe", {
@@ -76,15 +76,7 @@ async function initPush() {
   console.log("Abonnement envoyé au serveur.");
 }
 
-// Conversion de base64url → Uint8Array (nécessaire pour Chrome/Firefox)
-function urlBase64ToUint8Array(base64String) {
-  const padding = '='.repeat((4 - base64String.length % 4) % 4);
-  const base64 = (base64String + padding)
-    .replace(/-/g, '+')
-    .replace(/_/g, '/');
-  const raw = atob(base64);
-  return Uint8Array.from([...raw].map(c => c.charCodeAt(0)));
-}
+
 
 initPush();
 
