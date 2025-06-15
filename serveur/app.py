@@ -5,11 +5,16 @@ import pytz
 import os
 import time
 import json
+from pywebpush import webpush, WebPushException
 
 app = Flask(__name__)
 app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite:///sonnette.db'
 app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
 SECRET_KEY = os.environ.get("SONNETTE_SECRET", "super_secret")
+
+VAPID_PRIVATE_KEY = "MIGHAgEAMBMGByqGSM49AgEGCCqGSM49AwEHBG0wawIBAQQgGDn1mJ4wYLjsyVR4wSblA8svjmBuqlNj2FtoEPOccZKhRANCAATsQaveWT254M7jKIJp2q0iX8FiusKsyOTN3lGhGUA9nLg7yc/ERtGKnN1dkl8dVuHVph9k6kSbh2iTwc5VE4F8"  # ta clé privée
+VAPID_PUBLIC_KEY  = "MFkwEwYHKoZIzj0CAQYIKoZIzj0DAQcDQgAE7EGr3lk9ueDO4yiCadqtIl/BYrrCrMjkzd5RoRlAPZy4O8nPxEbRipzdXZJfHVbh1aYfZOpEm4dok8HOVROBfA=="
+VAPID_CLAIMS = {"sub": "mailto:thomas.jeanjacquot@telecomnancy.net"}
 
 db = SQLAlchemy(app)
 
@@ -33,9 +38,43 @@ class IntrusEvent(db.Model):
     __tablename__ = 'intrus_events'
     id = db.Column(db.Integer, primary_key=True)
     timestamp = db.Column(db.DateTime, nullable=False)
+    
+    
+class PushSubscription(db.Model):
+    __tablename__ = 'push_subscriptions'
+    id = db.Column(db.Integer, primary_key=True)
+    endpoint = db.Column(db.Text, nullable=False)
+    p256dh = db.Column(db.Text, nullable=False)
+    auth = db.Column(db.Text, nullable=False)
+
 
 with app.app_context():
     db.create_all()
+    
+    
+def send_notification_to_all(title, message):
+    subs = PushSubscription.query.all()
+    payload = json.dumps({
+        "title": title,
+        "body": message,
+        "icon": "/static/bell.png"  # optionnel
+    })
+    for sub in subs:
+        try:
+            webpush(
+                subscription_info={
+                    "endpoint": sub.endpoint,
+                    "keys": {
+                        "p256dh": sub.p256dh,
+                        "auth": sub.auth
+                    }
+                },
+                data=payload,
+                vapid_private_key=VAPID_PRIVATE_KEY,
+                vapid_claims=VAPID_CLAIMS
+            )
+        except WebPushException as e:
+            print("Erreur push:", e)
 
 @app.route('/')
 def index():
@@ -73,10 +112,12 @@ def receive_sonnette():
     if evt_type == "bell":
         db.session.add(BellEvent(timestamp=ts))
         db.session.commit()
+        send_notification_to_all("🔔 Nouvelle alerte", "Quelqu’un a sonné à la porte.")
         return jsonify({"status": "bell event recorded"})
     elif evt_type == "intrus":
         db.session.add(IntrusEvent(timestamp=ts))
         db.session.commit()
+        send_notification_to_all("🚨 Détection d’intrus", "Un mouvement a été détecté.")
         return jsonify({"status": "intrus event recorded"})
     else:
         return jsonify({"error": "invalid type"}), 400
@@ -103,6 +144,24 @@ def stream():
             yield f"data: {json.dumps(state)}\n\n"
             time.sleep(2)
     return Response(event_stream(), mimetype='text/event-stream')
+
+
+@app.route('/subscribe', methods=['POST'])
+def subscribe():
+    data = request.get_json()
+    if not data or 'endpoint' not in data:
+        return jsonify({'error': 'Invalid subscription'}), 400
+
+    sub = PushSubscription(
+        endpoint=data['endpoint'],
+        p256dh=data['keys']['p256dh'],
+        auth=data['keys']['auth']
+    )
+    db.session.add(sub)
+    db.session.commit()
+    return jsonify({'status': 'subscribed'})
+
+
 
 if __name__ == "__main__":
     app.run(host="127.0.0.1", port=8000)
