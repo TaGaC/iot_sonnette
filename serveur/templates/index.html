@@ -48,7 +48,7 @@
 navigator.serviceWorker.register('/static/sw.js').then(reg => {
   return reg.pushManager.subscribe({
     userVisibleOnly: true,
-    applicationServerKey: "MFkwEwYHKoZIzj0CAQYIKoZIzj0DAQcDQgAE7EGr3lk9ueDO4yiCadqtIl/BYrrCrMjkzd5RoRlAPZy4O8nPxEbRipzdXZJfHVbh1aYfZOpEm4dok8HOVROBfA=="
+    applicationServerKey: "MFkwEwYHKoZIzj0CAQYIKoZIzj0DAQcDQgAE7EGr3lk9ueDO4yiCadqtIl_BYrrCrMjkzd5RoRlAPZy4O8nPxEbRipzdXZJfHVbh1aYfZOpEm4dok8HOVROBfA"
   });
 }).then(subscription => {
   return fetch('/subscribe', {
