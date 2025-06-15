@@ -1,0 +1,22 @@
+{% extends "base.html" %}
+{% block content %}
+<div class="card" style="max-width:400px;margin:auto;">
+  <div class="card-body">
+    <h3 class="card-title mb-3">Connexion IoT Panel</h3>
+    {% if error %}
+      <div class="alert alert-danger">{{ error }}</div>
+    {% endif %}
+    <form method="POST">
+      <div class="mb-3">
+        <label class="form-label">Identifiant</label>
+        <input class="form-control" type="text" name="username" placeholder="admin" required autofocus>
+      </div>
+      <div class="mb-3">
+        <label class="form-label">Mot de passe</label>
+        <input class="form-control" type="password" name="password" placeholder="iot2025" required>
+      </div>
+      <button class="btn btn-primary w-100" type="submit">Se connecter</button>
+    </form>
+  </div>
+</div>
+{% endblock %}
