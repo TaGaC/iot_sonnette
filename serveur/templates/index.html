@@ -45,7 +45,20 @@
 
 <script>
 
-const VAPID_PUBLIC_KEY = "MFkwEwYHKoZIzj0CAQYIKoZIzj0DAQcDQgAE7EGr3lk9ueDO4yiCadqtIl_BYrrCrMjkzd5RoRlAPZy4O8nPxEbRipzdXZJfHVbh1aYfZOpEm4dok8HOVROBfA";  // Clé publique en base64url (sans les = à la fin)
+const VAPID_PUBLIC_KEY = "MFkwEwYHKoZIzj0CAQYIKoZIzj0DAQcDQgAE7EGr3lk9ueDO4yiCadqtIl_BYrrCrMjkzd5RoRlAPZy4O8nPxEbRipzdXZJfHVbh1aYfZOpEm4dok8HOVROBfA";
+
+function urlBase64ToUint8Array(base64String) {
+  const padding = '='.repeat((4 - base64String.length % 4) % 4);
+  const base64 = (base64String + padding)
+    .replace(/-/g, '+')
+    .replace(/_/g, '/');
+  const rawData = atob(base64);
+  const outputArray = new Uint8Array(rawData.length);
+  for (let i = 0; i < rawData.length; ++i) {
+    outputArray[i] = rawData.charCodeAt(i);
+  }
+  return outputArray;
+}
 
 async function initPush() {
   if (!("serviceWorker" in navigator)) {
@@ -64,7 +77,7 @@ async function initPush() {
 
   const sub = await reg.pushManager.subscribe({
     userVisibleOnly: true,
-    applicationServerKey: VAPID_PUBLIC_KEY
+    applicationServerKey: urlBase64ToUint8Array(VAPID_PUBLIC_KEY)  // <--- Important !
   });
 
   await fetch("/subscribe", {
@@ -76,9 +89,8 @@ async function initPush() {
   console.log("Abonnement envoyé au serveur.");
 }
 
-
-
 initPush();
+
 
 function groupByDay(events) {
   // events: array of "YYYY-MM-DD HH:MM:SS" (déjà à l'heure locale !)
