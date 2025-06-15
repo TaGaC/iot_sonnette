@@ -12,8 +12,8 @@ app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite:///sonnette.db'
 app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
 SECRET_KEY = os.environ.get("SONNETTE_SECRET", "super_secret")
 
-VAPID_PRIVATE_KEY = "MIGHAgEAMBMGByqGSM49AgEGCCqGSM49AwEHBG0wawIBAQQgGDn1mJ4wYLjsyVR4wSblA8svjmBuqlNj2FtoEPOccZKhRANCAATsQaveWT254M7jKIJp2q0iX8FiusKsyOTN3lGhGUA9nLg7yc/ERtGKnN1dkl8dVuHVph9k6kSbh2iTwc5VE4F8"  # ta clé privée
-VAPID_PUBLIC_KEY  = "MFkwEwYHKoZIzj0CAQYIKoZIzj0DAQcDQgAE7EGr3lk9ueDO4yiCadqtIl_BYrrCrMjkzd5RoRlAPZy4O8nPxEbRipzdXZJfHVbh1aYfZOpEm4dok8HOVROBfA"
+VAPID_PRIVATE_KEY = "4QDH4NRlxvtLVaMcPQkChf80j1DP5TPqV9JUTgsLPFc"  # ta clé privée
+VAPID_PUBLIC_KEY  = "BA89zCzXgx5Ulz-p4_IyEMsbzofxWv7d1px-5648i9UCXj57vGnv_DmLYKdQ1JmxG5eRYN5Pp1czQbjOA66Z6Hg"
 VAPID_CLAIMS = {"sub": "mailto:thomas.jeanjacquot@telecomnancy.net"}
 
 db = SQLAlchemy(app)
