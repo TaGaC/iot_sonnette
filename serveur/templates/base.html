@@ -16,13 +16,14 @@
   <div class="container">
     <a class="navbar-brand" href="{{ url_for('index') }}">🏠 Security Panel IoT</a>
     <div class="d-flex ms-auto">
-      <a class="nav-link text-white" href="{{ url_for('admin') }}">Administration</a>
+      <a class="btn btn-outline-light" href="{{ url_for('admin') }}">Administration</a>
       {% if session.logged_in %}
         <a class="btn btn-outline-light ms-3" href="{{ url_for('logout') }}">Déconnexion</a>
       {% endif %}
     </div>
   </div>
 </nav>
+
 
 <div class="container">
     {% block content %}{% endblock %}
