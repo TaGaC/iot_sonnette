@@ -57,7 +57,7 @@ def send_notification_to_all(title, message):
     payload = json.dumps({
         "title": title,
         "body": message,
-        "icon": "/static/bell.png"  # optionnel
+        "icon": "/static/icon.png"  # optionnel
     })
     for sub in subs:
         try:
