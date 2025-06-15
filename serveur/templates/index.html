@@ -45,21 +45,48 @@
 
 <script>
 
-navigator.serviceWorker.register('/static/sw.js').then(reg => {
-  return reg.pushManager.subscribe({
-    userVisibleOnly: true,
-    applicationServerKey: "MFkwEwYHKoZIzj0CAQYIKoZIzj0DAQcDQgAE7EGr3lk9ueDO4yiCadqtIl_BYrrCrMjkzd5RoRlAPZy4O8nPxEbRipzdXZJfHVbh1aYfZOpEm4dok8HOVROBfA"
-  });
-}).then(subscription => {
-  return fetch('/subscribe', {
-    method: 'POST',
-    body: JSON.stringify(subscription),
-    headers: { 'Content-Type': 'application/json' }
-  });
-}).then(() => {
-  console.log("📬 Abonnement push enregistré.");
-}).catch(console.error);
+const VAPID_PUBLIC_KEY = "MFkwEwYHKoZIzj0CAQYIKoZIzj0DAQcDQgAE7EGr3lk9ueDO4yiCadqtIl_BYrrCrMjkzd5RoRlAPZy4O8nPxEbRipzdXZJfHVbh1aYfZOpEm4dok8HOVROBfA";  // Clé publique en base64url (sans les = à la fin)
 
+async function initPush() {
+  if (!("serviceWorker" in navigator)) {
+    console.warn("Service worker non supporté.");
+    return;
+  }
+
+  const reg = await navigator.serviceWorker.register("/static/sw.js");
+  console.log("Service worker enregistré", reg);
+
+  const permission = await Notification.requestPermission();
+  if (permission !== "granted") {
+    console.warn("Permission de notification refusée.");
+    return;
+  }
+
+  const sub = await reg.pushManager.subscribe({
+    userVisibleOnly: true,
+    applicationServerKey: urlBase64ToUint8Array(VAPID_PUBLIC_KEY)
+  });
+
+  await fetch("/subscribe", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(sub)
+  });
+
+  console.log("Abonnement envoyé au serveur.");
+}
+
+// Conversion de base64url → Uint8Array (nécessaire pour Chrome/Firefox)
+function urlBase64ToUint8Array(base64String) {
+  const padding = '='.repeat((4 - base64String.length % 4) % 4);
+  const base64 = (base64String + padding)
+    .replace(/-/g, '+')
+    .replace(/_/g, '/');
+  const raw = atob(base64);
+  return Uint8Array.from([...raw].map(c => c.charCodeAt(0)));
+}
+
+initPush();
 
 function groupByDay(events) {
   // events: array of "YYYY-MM-DD HH:MM:SS" (déjà à l'heure locale !)
