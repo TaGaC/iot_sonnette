@@ -1,0 +1,8 @@
+{
+  "name": "Smart Sonnette",
+  "short_name": "Sonnette",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#fff",
+  "description": "Notifications de ta sonnette connectée"
+}
