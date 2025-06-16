@@ -53,9 +53,11 @@ def main_loop():
     last_bell = 0
     high_streak = 0
     low_streak = 0
-    surveillance = False      # True dès qu'on a validé la présence (5 HIGH)
+    surveillance = False
     detection_time = 0
-    cycle_completed = False   # True après sonnerie ou intrusion, en attente de réarmement
+    cycle_completed = False
+
+    last_pir_state = None  # Mémorise l’état PIR précédent
 
     try:
         while True:
@@ -63,8 +65,10 @@ def main_loop():
             pir_state = GPIO.input(PIR_PIN) == GPIO.HIGH
             bell_pressed = GPIO.input(TOUCH_PIN) == GPIO.HIGH
 
-            # === DEBUG : Affichage état PIR chaque seconde ===
-            print(f"[{datetime.now().strftime('%H:%M:%S')}] [DEBUG] État PIR : {'HIGH (mouvement)' if pir_state else 'LOW (pas de mouvement)'}")
+            # === DEBUG : Affiche uniquement lors d'un changement d'état PIR ===
+            if pir_state != last_pir_state:
+                print(f"[{datetime.now().strftime('%H:%M:%S')}] [DEBUG] PIR passe {'HIGH (mouvement)' if pir_state else 'LOW (pas de mouvement)'}")
+                last_pir_state = pir_state
 
             # --- PHASE 1 : Attente de détection de présence (pas encore en surveillance) ---
             if not surveillance and not cycle_completed:
@@ -77,7 +81,7 @@ def main_loop():
                         print(f"[{datetime.now().strftime('%H:%M:%S')}] === {MIN_HIGH_STREAK} HIGH consécutifs détectés : DÉBUT DU DÉCOMPTE ALERTE INTRUS ({ALERT_TIMEOUT}s) ===")
                         surveillance = True
                         detection_time = now
-                        low_streak = 0  # On va compter les LOW pour le réarmement plus tard
+                        low_streak = 0
                 else:
                     if high_streak > 0:
                         print(f"[{datetime.now().strftime('%H:%M:%S')}] PIR repasse LOW, reset du compteur HIGH.")
@@ -85,21 +89,19 @@ def main_loop():
 
             # --- PHASE 2 : Surveillance (présence validée) ---
             elif surveillance:
-                # Déclenchement alerte intrus si temps écoulé sans sonnette
                 if now - detection_time > ALERT_TIMEOUT:
                     print(f"[{datetime.now().strftime('%H:%M:%S')}] ⚠️ INTRUS détecté (pas de sonnette après {ALERT_TIMEOUT}s)")
                     send_event("intrus")
                     surveillance = False
                     cycle_completed = True
-                    low_streak = 0  # On commence à compter les LOW pour réarmement
-                # Comptage des LOW pour le futur réarmement (après cycle)
+                    low_streak = 0
                 elif not pir_state:
                     low_streak += 1
                     if low_streak <= MIN_LOW_STREAK:
                         restants = MIN_LOW_STREAK - low_streak
                         print(f"[{datetime.now().strftime('%H:%M:%S')}] PIR LOW en surveillance ({low_streak}/{MIN_LOW_STREAK}) {'- Encore %d avant réarmement.' % restants if restants > 0 else '- Réarmement possible après événement.'}")
                 else:
-                    low_streak = 0  # S'il y a un nouveau HIGH, on reset le streak LOW
+                    low_streak = 0
 
             # --- PHASE 3 : Cycle complété, attente du réarmement (4 LOW) ---
             elif cycle_completed:
@@ -114,7 +116,7 @@ def main_loop():
                         high_streak = 0
                         low_streak = 0
                 else:
-                    low_streak = 0  # On reset si mouvement
+                    low_streak = 0
 
             # --- GESTION SONNETTE ---
             if bell_pressed and now - last_bell > COOLDOWN:
@@ -125,7 +127,7 @@ def main_loop():
                     print(f"[{datetime.now().strftime('%H:%M:%S')}] Sonnerie pendant alerte : annulation du cycle alerte/intrus.")
                     surveillance = False
                     cycle_completed = True
-                    low_streak = 0  # Pour le réarmement
+                    low_streak = 0
                 else:
                     send_event("bell")
                 last_bell = now
@@ -139,3 +141,4 @@ def main_loop():
 
 if __name__ == '__main__':
     main_loop()
+
