@@ -91,31 +91,43 @@ async function initPush() {
 
 initPush();
 
-
-function groupByDay(events) {
-  // events: array of "YYYY-MM-DD HH:MM:SS" (déjà à l'heure locale !)
+// -- Modifié ici : groupement des intrus par jour ET affichage du type --
+function groupIntrusByDayWithType(events) {
+  // events: [{timestamp: "YYYY-MM-DD HH:MM:SS", type: "..."}]
   const grouped = {};
   events.forEach(ev => {
-    const [date, time] = ev.split(' ');
-    const [year, month, day] = date.split('-');
+    const [date, time] = ev.timestamp.split(' ');
     const eventDate = new Date(`${date}T${time}`);
-    // Utilise Intl.DateTimeFormat pour localiser le nom du jour/mois en français
     const dayLabel = eventDate.toLocaleDateString('fr-FR', { weekday: 'long', day: '2-digit', month: 'long', year: 'numeric' });
     if (!grouped[dayLabel]) grouped[dayLabel] = [];
-    // Extrait juste l'heure sans les secondes
-    const hourMin = time.slice(0, 5);
-    grouped[dayLabel].push(hourMin);
+    grouped[dayLabel].push({
+      hour: time.slice(0, 5),
+      type: ev.type
+    });
   });
   return grouped;
 }
 
-// Connecte au flux serveur
+function groupByDay(events) {
+  // events: array of "YYYY-MM-DD HH:MM:SS"
+  const grouped = {};
+  events.forEach(ev => {
+    const [date, time] = ev.split(' ');
+    const eventDate = new Date(`${date}T${time}`);
+    const dayLabel = eventDate.toLocaleDateString('fr-FR', { weekday: 'long', day: '2-digit', month: 'long', year: 'numeric' });
+    if (!grouped[dayLabel]) grouped[dayLabel] = [];
+    grouped[dayLabel].push(time.slice(0, 5));
+  });
+  return grouped;
+}
+
+// Connexion au flux serveur
 const evtSource = new EventSource("/stream");
 
 evtSource.onmessage = e => {
   const data = JSON.parse(e.data);
 
-  // Historique sonneries (groupé par jour puis heure)
+  // Historique sonneries (inchangé)
   const bellGrouped = groupByDay(data.bell_events || []);
   const bellDiv = document.getElementById("bell-history");
   bellDiv.innerHTML = "";
@@ -132,17 +144,32 @@ evtSource.onmessage = e => {
     }
   }
 
-  // Historique intrus (groupé par jour puis heure)
-  const intrusGrouped = groupByDay(data.intrus_events || []);
+  // Historique intrus : groupement + affichage du type
+  const intrusGrouped = groupIntrusByDayWithType(data.intrus_events || []);
   const intrusDiv = document.getElementById("intrus-history");
   intrusDiv.innerHTML = "";
   if (Object.keys(intrusGrouped).length === 0) {
     intrusDiv.innerHTML = '<div class="text-muted">Aucune alerte intrus.</div>';
   } else {
-    for (const [day, hours] of Object.entries(intrusGrouped)) {
+    for (const [day, events] of Object.entries(intrusGrouped)) {
       let html = `<div class="fw-bold mb-1">${day.charAt(0).toUpperCase() + day.slice(1)} :</div><ul class="list-group mb-2">`;
-      hours.forEach(hhmm => {
-        html += `<li class="list-group-item list-group-item-danger py-1">ALERTE INTRUS à ${hhmm}</li>`;
+      events.forEach(ev => {
+        let label;
+        switch(ev.type) {
+          case "intrus_bruit":
+            label = "BRUIT suspect";
+            break;
+          case "intrus_presence":
+            label = "Présence (PIR)";
+            break;
+          case "intrus_presence_et_bruit":
+            label = "BRUIT + Présence";
+            break;
+          case "intrus":
+          default:
+            label = "INTRUS";
+        }
+        html += `<li class="list-group-item list-group-item-danger py-1">${label} à ${ev.hour}</li>`;
       });
       html += '</ul>';
       intrusDiv.innerHTML += html;
@@ -153,5 +180,6 @@ evtSource.onmessage = e => {
 evtSource.onerror = err => {
   console.error("SSE error:", err);
 };
+
 </script>
 {% endblock %}

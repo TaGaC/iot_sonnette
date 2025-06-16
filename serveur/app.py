@@ -37,6 +37,7 @@ class BellEvent(db.Model):
 class IntrusEvent(db.Model):
     __tablename__ = 'intrus_events'
     id = db.Column(db.Integer, primary_key=True)
+    type = db.Column(db.String(32), nullable=False, default="intrus")
     timestamp = db.Column(db.DateTime, nullable=False)
 
 class PushSubscription(db.Model):
@@ -154,15 +155,17 @@ def stream():
                 for b in BellEvent.query.order_by(BellEvent.timestamp.desc()).limit(10).all()
             ]
             intrus = [
-                to_local(i.timestamp)
+                {"timestamp": to_local(i.timestamp), "type": getattr(i, "type", "intrus")}
                 for i in IntrusEvent.query.order_by(IntrusEvent.timestamp.desc()).limit(10).all()
             ]
+
             state = {
                 'bell': bool(bells),
                 'intrus': bool(intrus),
                 'bell_events': bells,
-                'intrus_events': intrus
+                'intrus_events': intrus  # c’est une liste de dicts !
             }
+
             yield f"data: {json.dumps(state)}\n\n"
             time.sleep(2)
     return Response(event_stream(), mimetype='text/event-stream')
@@ -193,19 +196,19 @@ def receive_sonnette():
     #    return jsonify({"status": "intrus event recorded"})
 
     elif evt_type == "intrus_bruit":
-        db.session.add(IntrusEvent(timestamp=ts))
+        db.session.add(IntrusEvent(timestamp=ts, type=evt_type))
         db.session.commit()
         send_notification_to_all("🔊 Bruit suspect détecté", "Un bruit a été détecté (microphone).")
         return jsonify({"status": "intrus_bruit event recorded"})
 
     elif evt_type == "intrus_presence":
-        db.session.add(IntrusEvent(timestamp=ts))
+        db.session.add(IntrusEvent(timestamp=ts, type=evt_type))
         db.session.commit()
         send_notification_to_all("👤 Présence détectée", "Présence détectée devant la porte (PIR).")
         return jsonify({"status": "intrus_presence event recorded"})
 
     elif evt_type == "intrus_presence_et_bruit":
-        db.session.add(IntrusEvent(timestamp=ts))
+        db.session.add(IntrusEvent(timestamp=ts, type=evt_type))
         db.session.commit()
         send_notification_to_all("🚨 Intrus (son + mouvement)", "Bruit ET mouvement détectés !")
         return jsonify({"status": "intrus_presence_et_bruit event recorded"})

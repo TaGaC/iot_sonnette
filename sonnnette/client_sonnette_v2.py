@@ -9,25 +9,30 @@ import busio
 import adafruit_ads1x15.ads1115 as ADS
 from adafruit_ads1x15.analog_in import AnalogIn
 
-# === CONFIGURATION ===
-SPEAKER_PIN = 17
-TOUCH_PIN = 22
-PIR_PIN = 20
-COOLDOWN_BELL = 4  # anti-spam sonnette
-SERVER_URL = "https://smartsonnette.duckdns.org//api/sonnette"
-SECRET_KEY = "super_secret"
-ALERT_TIMEOUT = 20
-MIN_HIGH_STREAK = 8
-MIN_LOW_STREAK = 4
+# === CONFIGURATION PRINCIPALE ===
+
+SPEAKER_PIN = 17          # [GPIO] Broche GPIO du haut-parleur
+TOUCH_PIN = 22            # [GPIO] Broche GPIO du capteur tactile (bouton)
+PIR_PIN = 20              # [GPIO] Broche GPIO du capteur de mouvement PIR
+
+COOLDOWN_BELL = 2         # [secondes] Temps anti-spam entre deux sonnettes (appuis bouton)
+SERVER_URL = "https://smartsonnette.duckdns.org//api/sonnette"  # [URL] Adresse de l'API serveur
+SECRET_KEY = "super_secret"         # [str] Clé secrète pour authentification API
+
+ALERT_TIMEOUT = 20        # [secondes] Délai avant confirmation "intrus" si pas de sonnette
+MIN_HIGH_STREAK = 8       # [nombre] Nombre de détections HIGH (mouvement) PIR nécessaires pour armer l’alerte
+MIN_LOW_STREAK = 4        # [nombre] Nombre de détections LOW PIR consécutives pour réarmer le système
 
 # === CONFIGURATION DÉTECTION BRUIT ===
-SEUIL_BRUIT = 0.0040
-DUREE_DETECTION_BRUIT = 2.0      # secondes
-FENETRE_BRUIT = 0.2
-REFRESH_BRUIT = 0.02
 
-# === ANTI-SPAM NOTIF (secondes) ===
-NOTIF_COOLDOWN = 3.0
+SEUIL_BRUIT = 0.0040          # [volts] Seuil de tension pour considérer qu’un bruit est détecté (ADC)
+DUREE_DETECTION_BRUIT = 2.0   # [secondes] Durée pendant laquelle le bruit doit être détecté en continu
+FENETRE_BRUIT = 0.2           # [secondes] Fenêtre de temps utilisée pour la moyenne glissante sur la détection de bruit
+REFRESH_BRUIT = 0.02          # [secondes] Intervalle de lecture du capteur de bruit (fréquence d'échantillonnage ADC)
+
+# === ANTI-SPAM NOTIFICATIONS ===
+
+NOTIF_COOLDOWN = 30.0         # [secondes] Temps minimum entre deux notifications envoyées du même type (anti-spam général)
 
 GPIO.setwarnings(False)
 GPIO.setmode(GPIO.BCM)
@@ -211,6 +216,8 @@ def main_loop():
                 if now - last_sent > NOTIF_COOLDOWN:
                     send_event(notif_type)
                     notif_locks[notif_type] = now
+        
+
 
             time.sleep(1)
 
