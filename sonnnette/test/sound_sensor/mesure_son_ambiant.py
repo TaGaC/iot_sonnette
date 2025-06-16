@@ -1,3 +1,5 @@
+# Permet de mesurer le niveau sonore ambiant à l'aide d'un capteur analogique et ainsi fixer les différents seuils de détection
+
 import time
 from collections import deque
 import board

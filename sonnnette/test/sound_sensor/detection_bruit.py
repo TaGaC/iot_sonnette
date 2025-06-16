@@ -1,3 +1,5 @@
+# Détection de présence sonore avec un capteur analogique (à implémenter avec les autre capteurs par la suite)
+
 import time
 from collections import deque
 import board
