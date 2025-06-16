@@ -185,13 +185,34 @@ def receive_sonnette():
         db.session.commit()
         send_notification_to_all("🔔 Nouvelle alerte", "Quelqu’un a sonné à la porte.")
         return jsonify({"status": "bell event recorded"})
-    elif evt_type == "intrus":
+
+    #elif evt_type == "intrus":
+    #    db.session.add(IntrusEvent(timestamp=ts))
+    #    db.session.commit()
+    #    send_notification_to_all("🚨 Détection d’intrus", "Un mouvement a été détecté par le PIR.")
+    #    return jsonify({"status": "intrus event recorded"})
+
+    elif evt_type == "intrus_bruit":
         db.session.add(IntrusEvent(timestamp=ts))
         db.session.commit()
-        send_notification_to_all("🚨 Détection d’intrus", "Un mouvement a été détecté.")
-        return jsonify({"status": "intrus event recorded"})
+        send_notification_to_all("🔊 Bruit suspect détecté", "Un bruit a été détecté (microphone).")
+        return jsonify({"status": "intrus_bruit event recorded"})
+
+    elif evt_type == "intrus_presence":
+        db.session.add(IntrusEvent(timestamp=ts))
+        db.session.commit()
+        send_notification_to_all("👤 Présence détectée", "Présence détectée devant la porte (PIR).")
+        return jsonify({"status": "intrus_presence event recorded"})
+
+    elif evt_type == "intrus_presence_et_bruit":
+        db.session.add(IntrusEvent(timestamp=ts))
+        db.session.commit()
+        send_notification_to_all("🚨 Intrus (son + mouvement)", "Bruit ET mouvement détectés !")
+        return jsonify({"status": "intrus_presence_et_bruit event recorded"})
+
     else:
         return jsonify({"error": "invalid type"}), 400
+
 
 @app.route('/subscribe', methods=['POST'])
 def subscribe():

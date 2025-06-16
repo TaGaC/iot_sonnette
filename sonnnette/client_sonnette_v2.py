@@ -56,6 +56,7 @@ def send_event(evt_type):
         if r.ok:
             print(f"[{datetime.now().strftime('%H:%M:%S')}]  Événement {evt_type} envoyé.")
         else:
+            print(f"[DEBUG] Envoi event : {evt_type}")
             print(f"[!]  Erreur serveur : {r.status_code}")
     except Exception as e:
         print(f"[!]  Erreur réseau : {e}")
