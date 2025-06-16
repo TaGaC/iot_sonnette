@@ -5,35 +5,48 @@ import busio
 import adafruit_ads1x15.ads1115 as ADS
 from adafruit_ads1x15.analog_in import AnalogIn
 
-# Initialisation I2C et ADC (A1)
+# --- Paramètres modifiables ---
+SEUIL = 0.0040           # Seuil de tension en volt
+DUREE_DETECTION = 2.0    # Durée (secondes) de bruit à dépasser pour valider la présence
+REFRESH = 0.02           # Temps entre mesures (20 ms = 50 mesures/seconde)
+FENETRE = 0.2            # Durée de la fenêtre glissante pour la moyenne (en secondes)
+
+# Calcul de la taille du buffer pour la fenêtre glissante
+buffer_size = int(FENETRE / REFRESH)
+moyennes = deque([0]*int(DUREE_DETECTION / FENETRE), maxlen=int(DUREE_DETECTION / FENETRE))
+
+# --- Initialisation ADC ---
 i2c = busio.I2C(board.SCL, board.SDA)
 ads = ADS.ADS1115(i2c)
 chan = AnalogIn(ads, ADS.P1)
 
-# Paramètres détection
-window_size = 10     # Taille de la fenêtre glissante (ex: 10 mesures ~0.2 sec si refresh = 0.02)
-refresh = 0.02       # Délai entre mesures (20ms = 50 mesures/seconde)
-SEUIL = 0.02        # Seuil à ajuster selon tes tests ! (ex: 0.010 à 0.020 V)
-
-window = deque([0]*window_size, maxlen=window_size)
-last_detection = 0
-min_interval = 1.0   # Minimum 1 seconde entre deux détections (pour éviter le spam)
-
-print("Détection de bruit démarrée ! (seuil : {:.3f} V)".format(SEUIL))
-print("Appuie sur Ctrl+C pour arrêter.")
+print(f"Détection de présence sonore démarrée (seuil : {SEUIL:.4f} V, durée : {DUREE_DETECTION:.1f} s)")
+print("Appuie sur Ctrl+C pour arrêter.\n")
 
 try:
+    buffer = deque([0]*buffer_size, maxlen=buffer_size)
+    presence_detectee = False
+
     while True:
-        v = chan.voltage
-        window.append(v)
-        max_val = max(window)
+        v = abs(chan.voltage)
+        buffer.append(v)
 
-        # Si bruit détecté ET assez de temps écoulé depuis la dernière détection
-        if max_val > SEUIL and (time.time() - last_detection) > min_interval:
-            print(f"Bruit détecté ! Max fenêtre : {max_val:.3f} V")
-            last_detection = time.time()
+        # Toutes les FENETRE secondes, calcule la moyenne de la fenêtre et stocke-la
+        if len(buffer) == buffer_size:
+            moyenne_fenetre = sum(buffer) / buffer_size
+            moyennes.append(moyenne_fenetre)
 
-        time.sleep(refresh)
+            # Vérifie si le son a dépassé le seuil pendant toute la durée voulue
+            if all(m > SEUIL for m in moyennes):
+                if not presence_detectee:
+                    print(f"\n>> Présence détectée ! Son moyen > {SEUIL:.4f} V pendant {DUREE_DETECTION:.1f} s <<\n")
+                    presence_detectee = True
+            else:
+                if presence_detectee:
+                    print("Présence sonore terminée.\n")
+                    presence_detectee = False
+
+        time.sleep(REFRESH)
 
 except KeyboardInterrupt:
     print("\nArrêt du programme.")
