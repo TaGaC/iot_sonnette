@@ -13,7 +13,7 @@ chan = AnalogIn(ads, ADS.P1)
 # Paramètres détection
 window_size = 10     # Taille de la fenêtre glissante (ex: 10 mesures ~0.2 sec si refresh = 0.02)
 refresh = 0.02       # Délai entre mesures (20ms = 50 mesures/seconde)
-SEUIL = 0.012        # Seuil à ajuster selon tes tests ! (ex: 0.010 à 0.020 V)
+SEUIL = 0.02        # Seuil à ajuster selon tes tests ! (ex: 0.010 à 0.020 V)
 
 window = deque([0]*window_size, maxlen=window_size)
 last_detection = 0
