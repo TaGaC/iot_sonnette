@@ -61,7 +61,7 @@ def send_event(evt_type):
         if r.ok:
             print(f"[{datetime.now().strftime('%H:%M:%S')}]  Événement {evt_type} envoyé.")
         else:
-            print(f"[DEBUG] Envoi event : {evt_type}")
+            #print(f"[DEBUG] Envoi event : {evt_type}")
             print(f"[!]  Erreur serveur : {r.status_code}")
     except Exception as e:
         print(f"[!]  Erreur réseau : {e}")
@@ -134,9 +134,9 @@ def main_loop():
             bruit = bruit_detector.bruit
 
             # === DEBUG : Affiche uniquement lors d'un changement d'état PIR ===
-            if pir_state != last_pir_state:
-                print(f"[{datetime.now().strftime('%H:%M:%S')}] [DEBUG] PIR passe {'HIGH (mouvement)' if pir_state else 'LOW (pas de mouvement)'}")
-                last_pir_state = pir_state
+            #if pir_state != last_pir_state:
+                #print(f"[{datetime.now().strftime('%H:%M:%S')}] [DEBUG] PIR passe {'HIGH (mouvement)' if pir_state else 'LOW (pas de mouvement)'}")
+                #last_pir_state = pir_state
 
             # --- PHASE 1 : Attente de détection de présence (pas encore en surveillance) ---
             if not surveillance and not cycle_completed:

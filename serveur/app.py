@@ -163,7 +163,7 @@ def stream():
                 'bell': bool(bells),
                 'intrus': bool(intrus),
                 'bell_events': bells,
-                'intrus_events': intrus  # c’est une liste de dicts !
+                'intrus_events': intrus 
             }
 
             yield f"data: {json.dumps(state)}\n\n"

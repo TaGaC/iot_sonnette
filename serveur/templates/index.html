@@ -77,7 +77,7 @@ async function initPush() {
 
   const sub = await reg.pushManager.subscribe({
     userVisibleOnly: true,
-    applicationServerKey: urlBase64ToUint8Array(VAPID_PUBLIC_KEY)  // <--- Important !
+    applicationServerKey: urlBase64ToUint8Array(VAPID_PUBLIC_KEY)  
   });
 
   await fetch("/subscribe", {
@@ -91,7 +91,7 @@ async function initPush() {
 
 initPush();
 
-// -- Modifié ici : groupement des intrus par jour ET affichage du type --
+// -- Groupement des intrus par jour ET affichage du type --
 function groupIntrusByDayWithType(events) {
   // events: [{timestamp: "YYYY-MM-DD HH:MM:SS", type: "..."}]
   const grouped = {};
@@ -109,7 +109,6 @@ function groupIntrusByDayWithType(events) {
 }
 
 function groupByDay(events) {
-  // events: array of "YYYY-MM-DD HH:MM:SS"
   const grouped = {};
   events.forEach(ev => {
     const [date, time] = ev.split(' ');
@@ -127,7 +126,7 @@ const evtSource = new EventSource("/stream");
 evtSource.onmessage = e => {
   const data = JSON.parse(e.data);
 
-  // Historique sonneries (inchangé)
+  // Historique sonneries
   const bellGrouped = groupByDay(data.bell_events || []);
   const bellDiv = document.getElementById("bell-history");
   bellDiv.innerHTML = "";
@@ -157,13 +156,13 @@ evtSource.onmessage = e => {
         let label;
         switch(ev.type) {
           case "intrus_bruit":
-            label = "BRUIT suspect";
+            label = "Bruits suspects";
             break;
           case "intrus_presence":
-            label = "Présence (PIR)";
+            label = "Intrus discret";
             break;
           case "intrus_presence_et_bruit":
-            label = "BRUIT + Présence";
+            label = "Intrus bruyants";
             break;
           case "intrus":
           default:
